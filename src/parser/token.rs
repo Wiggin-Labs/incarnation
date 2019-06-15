@@ -22,17 +22,9 @@ pub enum Token {
     BlockComment(Index),
     /// # used for creating literals
     Pound(Index),
-    Dot(Index),
-    Quote(Index),
-    Quasiquote(Index),
-    Unquote(Index),
-    UnquoteSplice(Index),
     String(Index),
     Integer(Index),
-    Rational(Index),
     Float(Index),
-    ComplexExact(Index),
-    ComplexFloating(Index),
     Symbol(Index),
 }
 
@@ -51,17 +43,9 @@ impl Token {
             Comment(i) => *i,
             BlockComment(i) => *i,
             Pound(i) => *i,
-            Dot(i) => *i,
-            Quote(i) => *i,
-            Quasiquote(i) => *i,
-            Unquote(i) => *i,
-            UnquoteSplice(i) => *i,
             String(i) => *i,
             Integer(i) => *i,
-            Rational(i) => *i,
             Float(i) => *i,
-            ComplexExact(i) => *i,
-            ComplexFloating(i) => *i,
             Symbol(i) => *i,
         }
     }

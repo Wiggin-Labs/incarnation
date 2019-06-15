@@ -1,4 +1,4 @@
-use super::{Index, ParseError, Token};
+use super::{Index, TokenizeError, Token};
 use super::Token as T;
 
 use regex::Regex;
@@ -6,9 +6,9 @@ use regex::Regex;
 use std::iter::Peekable;
 use std::str::Chars;
 
-type ParseResult = Result<(), ParseError>;
+type TokenizeResult = Result<(), TokenizeError>;
 
-pub struct Parser<'a> {
+pub struct Tokenizer<'a> {
     position: usize,
     raw_input: &'a str,
     input: Peekable<Chars<'a>>,
@@ -21,18 +21,18 @@ macro_rules! pt {
     };
 }
 
-impl<'a> Parser<'a> {
-    pub fn parse(raw_input: &'a str) -> Result<Vec<Token>, ParseError> {
+impl<'a> Tokenizer<'a> {
+    pub fn tokenize(raw_input: &'a str) -> Result<Vec<Token>, TokenizeError> {
         let input = raw_input.chars().peekable();
-        let mut parser = Parser {
+        let mut tokenizer = Tokenizer {
             position: 0,
             raw_input: raw_input,
             input: input,
             tokens: Vec::new(),
         };
-        parser._parse()?;
+        tokenizer._tokenize()?;
 
-        Ok(parser.tokens)
+        Ok(tokenizer.tokens)
     }
 
     fn next(&mut self) -> Option<char> {
@@ -54,7 +54,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn _parse(&mut self) -> ParseResult {
+    fn _tokenize(&mut self) -> TokenizeResult {
         while let Some(c) = self.next() {
             match c {
                 '(' => pt!(T::LParen, self),
@@ -65,15 +65,6 @@ impl<'a> Parser<'a> {
                 ']' => pt!(T::RSBracket, self),
                 '<' => pt!(T::LABracket, self),
                 '>' => pt!(T::RABracket, self),
-                '\'' => pt!(T::Quote, self),
-                '`' => pt!(T::Quasiquote, self),
-                ',' => match self.peek() {
-                    Some('@') => {
-                        self.next();
-                        pt!(T::UnquoteSplice, self);
-                    }
-                    _ => pt!(T::Unquote, self),
-                },
                 '"' => self.parse_string()?,
                 '|' => self.parse_identifier(self.position, true)?,
                 ';' => self.parse_comment()?,
@@ -82,18 +73,12 @@ impl<'a> Parser<'a> {
                     _ => pt!(T::Pound, self),
                 },
                 c if c.is_whitespace() => {}
-                '.' => match self.peek() {
-                    Some(c) => match c {
-                        c if is_delimiter(c) => pt!(T::Dot, self),
-                        _ => self.parse_ambiguous()?,
-                    },
-                    None => pt!(T::Dot, self),
-                },
+                '.' => self.parse_ambiguous()?,
                 '0' ... '9' | '+' | '-' => self.parse_ambiguous()?,
                 _ => {
                     let start = self.position;
                     if '\\' == c && self.next().is_none() {
-                        return Err(ParseError::EOF);
+                        return Err(TokenizeError::EOF);
                     }
                     self.parse_identifier(start, false)?;
                 }
@@ -102,7 +87,7 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    fn parse_ambiguous(&mut self) -> ParseResult {
+    fn parse_ambiguous(&mut self) -> TokenizeResult {
         let start = self.position;
 
         while let Some(c) = self.next() {
@@ -133,7 +118,7 @@ impl<'a> Parser<'a> {
                 _ if c.is_whitespace() => break,
                 '\\' => match self.next() {
                     Some(_) => return self.parse_identifier(start, false),
-                    None => return Err(ParseError::EOF),
+                    None => return Err(TokenizeError::EOF),
                 },
                 _ => return self.parse_identifier(start, c == '|'),
             }
@@ -141,15 +126,10 @@ impl<'a> Parser<'a> {
         self.distinguish_ambiguous(start)
     }
 
-    fn distinguish_ambiguous(&mut self, start: usize) -> ParseResult {
-        const _RAT: &'static str = r"\d+(?:/\d+)?";
-        const _REAL: &'static str = r"\d*\.?\d+(?:[eE][-+]?\d+)?";
+    fn distinguish_ambiguous(&mut self, start: usize) -> TokenizeResult {
         lazy_static! {
             static ref INTEGER: Regex = Regex::new(r"^([+-]?\d+)$").unwrap();
-            static ref RATIONAL: Regex = Regex::new(&format!(r"^([+-]?{})$", _RAT)).unwrap();
-            static ref REAL: Regex = Regex::new(&format!("^([+-]?{})$", _REAL)).unwrap();
-            static ref COMPLEX_RAT: Regex = Regex::new(&format!("^([+-]?{})?(?:([+-](?:{0})?)i)?$", _RAT)).unwrap();
-            static ref COMPLEX_REAL: Regex = Regex::new(&format!("^([+-]?(?:{}|{}))?(?:([+-](?:{0}|{1})?)i)?$", _REAL, _RAT)).unwrap();
+            static ref REAL: Regex = Regex::new(r"^([+-]?\d*\.?\d+(?:[eE][-+]?\d+)?)$").unwrap();
         }
 
 
@@ -164,39 +144,21 @@ impl<'a> Parser<'a> {
         let index = Index::new(start, end);
 
         if INTEGER.is_match(&buf) {
-            //let captures = INTEGER.captures(&buf).unwrap();
-            //let n = captures.get(1).map(|s| s.as_str().to_owned()).unwrap();
             self.tokens.push(T::Integer(index));
-        } else if RATIONAL.is_match(&buf) {
-            //let captures = RATIONAL.captures(&buf).unwrap();
-            //let n = captures.get(1).map(|s| s.as_str().to_owned()).unwrap();
-            self.tokens.push(T::Rational(index));
         } else if REAL.is_match(&buf) {
-            //let captures = REAL.captures(&buf).unwrap();
-            //let n = captures.get(1).map(|s| s.as_str().to_owned()).unwrap();
             self.tokens.push(T::Float(index));
-        } else if COMPLEX_RAT.is_match(&buf) {
-            //let captures = COMPLEX_RAT.captures(&buf).unwrap();
-            //let real = captures.get(1).map(|s| s.as_str().to_owned());
-            //let imaginary = captures.get(2).map(|s| s.as_str().to_owned());
-            self.tokens.push(T::ComplexExact(index));
-        } else if COMPLEX_REAL.is_match(&buf) {
-            //let captures = COMPLEX_REAL.captures(&buf).unwrap();
-            //let real = captures.get(1).map(|s| s.as_str().to_owned());
-            //let imaginary = captures.get(2).map(|s| s.as_str().to_owned());
-            self.tokens.push(T::ComplexFloating(index));
         } else {
             self.tokens.push(T::Symbol(index));
         }
         Ok(())
     }
 
-    fn parse_identifier(&mut self, start: usize, mut in_bar: bool) -> ParseResult {
+    fn parse_identifier(&mut self, start: usize, mut in_bar: bool) -> TokenizeResult {
         while let Some(c) = self.next() {
             match c {
                 '\\' => match self.next() {
                     Some(_) => (),
-                    None => return Err(ParseError::EOF),
+                    None => return Err(TokenizeError::EOF),
                 },
                 '|' => in_bar = !in_bar,
                 c if is_delimiter(c) => if !in_bar {
@@ -213,7 +175,7 @@ impl<'a> Parser<'a> {
                         '>' => Ok(pt!(T::RABracket, self)),
                         '"' => self.parse_string(),
                         ';' => self.parse_comment(),
-                        _ => panic!("Parser error"),
+                        _ => panic!("Tokenizer error"),
                     };
                 },
                 _ => (),
@@ -223,7 +185,7 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    pub fn parse_string(&mut self) -> ParseResult {
+    pub fn parse_string(&mut self) -> TokenizeResult {
         let start = self.position;
         while let Some(c) = self.next() {
             match c {
@@ -234,7 +196,7 @@ impl<'a> Parser<'a> {
                         _ => (),
                     }
                 } else {
-                    return Err(ParseError::EOF);
+                    return Err(TokenizeError::EOF);
                 },
                 '"' => {
                     self.tokens.push(T::String(Index::new(start, self.position)));
@@ -243,10 +205,10 @@ impl<'a> Parser<'a> {
                 _ => (),
             }
         }
-        Err(ParseError::EOF)
+        Err(TokenizeError::EOF)
     }
 
-    fn parse_block_comment(&mut self) -> ParseResult {
+    fn parse_block_comment(&mut self) -> TokenizeResult {
         // TODO: maybe -1 here
         let start = self.position;
         let mut nesting = 1;
@@ -261,20 +223,20 @@ impl<'a> Parser<'a> {
                         }
                     }
                     Some(_) => (),
-                    None => return Err(ParseError::EOF),
+                    None => return Err(TokenizeError::EOF),
                 },
                 '#' => match self.next() {
                     Some('|') => nesting += 1,
                     Some(_) => (),
-                    None => return Err(ParseError::EOF),
+                    None => return Err(TokenizeError::EOF),
                 },
                 _ => (),
             }
         }
-        Err(ParseError::EOF)
+        Err(TokenizeError::EOF)
     }
 
-    fn parse_comment(&mut self) -> ParseResult {
+    fn parse_comment(&mut self) -> TokenizeResult {
         let start = self.position;
         while let Some(c) = self.next() {
             match c {
