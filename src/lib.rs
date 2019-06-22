@@ -10,6 +10,8 @@ extern crate lazy_static;
 extern crate regex;
 extern crate string_interner;
 
+pub mod amd64;
+pub mod assembly;
 pub mod ast;
 pub mod parser;
 pub mod executable;

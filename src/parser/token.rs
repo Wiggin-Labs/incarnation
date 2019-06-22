@@ -50,6 +50,30 @@ impl Token {
         }
     }
 
+    pub fn commentp(&self) -> bool {
+        use self::Token::*;
+        match self {
+            Comment(_) | BlockComment(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn openerp(&self) -> bool {
+        use self::Token::*;
+        match self {
+            LParen(_) | LBrace(_) | LSBracket(_) | LABracket(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn closerp(&self) -> bool {
+        use self::Token::*;
+        match self {
+            RParen(_) | RBrace(_) | RSBracket(_) | RABracket(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn as_str<'a>(&self, input: &'a str) -> &'a str {
         let Index { start, end } = self.index();
         &input[start..end]
