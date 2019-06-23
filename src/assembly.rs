@@ -89,6 +89,25 @@ pub fn parse(tokens: &[Token], input: &str, inlinep: bool) -> Result<Vec<Instruc
                     return Err(Error::Closer);
                 }
             }
+            // Skip over comments
+            Some(t) if t.commentp() => loop {
+                if let Some(t) = parser.next() {
+                    match t {
+                        _ if t.closerp() => {
+                            if inlinep {
+                                return Ok(instructions);
+                            } else {
+                                return Err(Error::Closer);
+                            }
+                        }
+                        _ if t.commentp() => (),
+                        _ if !t.openerp() => return Err(Error::Opener),
+                        _ => break,
+                    }
+                } else {
+                    return Err(Error::EndOfInput);
+                }
+            },
             Some(t) if !t.openerp() => return Err(Error::Opener),
             // If this is inline assembly we expect it to end with an extra closer, which isn't
             // there if we've reached end of input.
