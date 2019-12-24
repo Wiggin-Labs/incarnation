@@ -1,0 +1,12 @@
+mov $1, %rax
+mov $1, %eax
+movq $5, -1777775512(%rax)
+movq $5, (%rcx)
+movq $5, (%rdx)
+movq $5, (%rbx)
+movq $5, (%rsp)
+movq $5, (%rbp)
+movq $5, (%rsi)
+movq $5, (%rdi)
+movq $5, (%r8)
+movq $5, (%r9)
