@@ -16,7 +16,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.write_str(match self {
             Error::Opcode => "Invalid opcode",
-            Error::ZeroOperands => "Expected no operands",
+            Error::Operands => "Incorrect number of operands",
             Error::Register => "Invalid register name",
             Error::ToConstant => "Cannot mov to a constant",
         })
@@ -28,6 +28,7 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
 
     for instruction in instructions {
         match instruction.opcode.as_str(input) {
+            /*
             "mov-u8" => {
                 // TODO
                 assert!(instruction.operands.len() == 2);
@@ -120,12 +121,14 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                     Operand::Constant(_) => return Err(Error::ToConstant),
                 }
             },
+            */
             "syscall" => {
                 if instruction.operands.len() != 0 {
-                    return Err(Error::ZeroOperands);
+                    return Err(Error::Operands);
                 }
                 asm.syscall();
             }
+        /*
             "sub" => {
                 // TODO
                 assert!(instruction.operands.len() == 2);
@@ -143,6 +146,7 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                     unreachable!();
                 }
             }
+        */
             _ => return Err(Error::Opcode),
         }
     }

@@ -1,17 +1,9 @@
-#![feature(nll)]
-#![allow(ellipsis_inclusive_range_patterns)]
-
-extern crate asm;
+extern crate amd64;
 extern crate byteorder;
-#[macro_use]
-extern crate derive_is_enum_variant;
-#[macro_use]
-extern crate lazy_static;
-extern crate regex;
-extern crate string_interner;
+extern crate tokenizer;
 
-pub mod amd64;
-pub mod assembly;
+//pub mod amd64;
+//pub mod assembly;
 pub mod ast;
-pub mod parser;
+pub mod liru;
 pub mod executable;

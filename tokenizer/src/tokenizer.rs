@@ -74,7 +74,7 @@ impl<'a> Tokenizer<'a> {
                 },
                 c if c.is_whitespace() => {}
                 '.' => self.parse_ambiguous()?,
-                '0' ... '9' | '+' | '-' => self.parse_ambiguous()?,
+                '0' ..= '9' | '+' | '-' => self.parse_ambiguous()?,
                 _ => {
                     let start = self.position;
                     if '\\' == c && self.next().is_none() {
@@ -92,7 +92,7 @@ impl<'a> Tokenizer<'a> {
 
         while let Some(c) = self.next() {
             match c {
-                '0' ... '9' | '+' | '-' | '/' | '.' | 'e' | 'i' => (),
+                '0' ..= '9' | '+' | '-' | '/' | '.' | 'e' | 'i' => (),
                 '(' | '{' | '[' | '<' => {
                     self.distinguish_ambiguous(start)?;
                     match c {

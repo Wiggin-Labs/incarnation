@@ -58,6 +58,17 @@ impl Token {
         }
     }
 
+    pub fn opener_match(self, closer: Self) -> bool {
+        use self::Token::*;
+        match (self, closer) {
+            (LParen(_), RParen(_)) => true,
+            (LBrace(_), RBrace(_)) => true,
+            (LSBracket(_), RSBracket(_)) => true,
+            (LABracket(_), RABracket(_)) => true,
+            _ => false,
+        }
+    }
+
     pub fn openerp(&self) -> bool {
         use self::Token::*;
         match self {
