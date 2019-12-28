@@ -219,39 +219,6 @@ impl Assembler {
         self.emitter.emit_byte(*modrm);
     }
 
-    pub fn mov_reg_u32(&mut self, to: Register, imm: u32) {
-        if to.b64p() {
-            let mut rex = REX::new().w();
-            if to.rexp() {
-                rex.set_b();
-            }
-            self.emitter.emit_byte(*rex);
-        }
-
-        self.emitter.emit_byte(0xb8 + to.value());
-        self.emitter.emit_u32(imm as u32);
-    }
-
-    pub fn mov_reg_i32(&mut self, to: Register, imm: i32) {
-        self.mov_reg_u32(to, imm as u32);
-    }
-
-    pub fn mov_reg_u64(&mut self, to: Register, imm: u64) {
-        let mut rex = REX::new().w();
-        if to.rexp() {
-            rex.set_b();
-        }
-
-        self.emitter.emit_byte(*rex);
-        // movabs
-        self.emitter.emit_byte(0xb8 + to.value());
-        self.emitter.emit_u64(imm);
-    }
-
-    pub fn mov_reg_i64(&mut self, to: Register, imm: i64) {
-        self.mov_reg_u64(to, imm as u64);
-    }
-
     pub fn mov_addr_i32(&mut self, to: Register, displacement: Option<Displacement>, imm: i32) {
         let mut rex = REX::new().w();
         if to.rexp() {
