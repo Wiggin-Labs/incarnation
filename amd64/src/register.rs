@@ -1,3 +1,5 @@
+use asm_syntax::parser::Immediate;
+
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Hash)]
 #[repr(u8)]
 pub enum Register {
@@ -185,6 +187,35 @@ impl Register {
             AL | CL | DL | BL | AH | CH | DH | BH |
                 R8L | R9L | R10L | R11L | R12L | R13L | R14L | R15L => true,
             _ => false,
+        }
+    }
+
+    pub fn matches_imm(&self, imm: Immediate) -> bool {
+        if self.b8p() {
+            imm.b8p()
+        } else if self.b16p() {
+            // TODO: not sure if these should include smaller values or not
+            imm.b8p() || imm.b16p()
+        } else if self.b32p() {
+            imm.b8p() || imm.b16p() || imm.b32p()
+        } else if self.b64p() {
+            imm.b8p() || imm.b16p() || imm.b32p() || imm.b64p()
+        } else {
+            unreachable!();
+        }
+    }
+
+    pub fn matches_reg(&self, reg: Register) -> bool {
+        if self.b8p() {
+            reg.b8p()
+        } else if self.b16p() {
+            reg.b16p()
+        } else if self.b32p() {
+            reg.b32p()
+        } else if self.b64p() {
+            reg.b64p()
+        } else {
+            unreachable!();
         }
     }
 }

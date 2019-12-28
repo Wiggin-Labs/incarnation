@@ -15,6 +15,10 @@ impl REX {
         REX(self.0 | 0b1000)
     }
 
+    pub fn set_w(&mut self) {
+        *self = REX(self.0 | 0b1000);
+    }
+
     /// Set REX.R bit.
     /// Extension of the ModR/M reg field.
     pub const fn r(self) -> Self {
@@ -29,6 +33,10 @@ impl REX {
     /// Extension of the SIB index field.
     pub const fn x(self) -> Self {
         REX(self.0 | 0b0010)
+    }
+
+    pub fn set_x(&mut self) {
+        *self = REX(self.0 | 0b0010);
     }
 
     /// Set REX.B bit.

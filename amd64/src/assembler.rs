@@ -1,6 +1,6 @@
-use {Emitter, ModRM, Register, REX, SIB};
+use {Emitter, ModRM, OSO, Register, REX, SIB};
 
-use asm_syntax::parser::Displacement;
+use asm_syntax::parser::{Displacement, Immediate};
 
 use std::collections::HashMap;
 
@@ -111,32 +111,88 @@ impl Assembler {
         self.emitter.emit_byte(0xc3);
     }
 
-    pub fn call_reg(&mut self, reg: Register) {
+    pub fn call_addr(&mut self, reg: Register) {
+        if reg.rexp() {
+            let rex = REX::new().b();
+            self.emitter.emit_byte(*rex);
+        }
+
+        // call
+        self.emitter.emit_byte(0xff);
+
         let modrm = ModRM::new().mod_direct()
             // opcode extension
             .reg(2)
             .rm_reg(reg);
 
-        // Don't think REX is needed here
-        /*
-        if reg.rexp() {
-            let rex = REX::new().b();
-            self.emitter.emit_byte(*rex);
-        }
-        */
-        // call
-        self.emitter.emit_byte(0xff);
         self.emitter.emit_byte(*modrm);
     }
 
-    pub fn mov_reg_reg(&mut self, to: Register, from: Register) {
-        let modrm = ModRM::new()
-            .mod_direct()
-            .reg_reg(from)
-            .rm_reg(to);
+    pub fn call_imm(&mut self, imm: Immediate) {
+        assert!(imm.b32p());
 
-        if to.rexp() || from.rexp() {
-            let mut rex = REX::new().w();
+        let modrm = ModRM::new()
+            // opcode extension
+            .reg(2)
+            // TODO: figure out why this is 4
+            .rm(4);
+
+        // TODO: handle SIB byte
+        let sib = SIB::new().base(5);
+
+        // call
+        self.emitter.emit_byte(0xff);
+        self.emitter.emit_byte(*modrm);
+        self.emitter.emit_byte(*sib);
+        self.emitter.emit_imm(imm);
+    }
+
+    pub fn mov_reg_imm(&mut self, to: Register, imm: Immediate) {
+        assert!(to.matches_imm(imm));
+        if to.b16p() {
+            self.emitter.emit_byte(*OSO::new());
+        }
+
+        if to.b64p() || to.rexp() {
+            let mut rex = REX::new();
+            if to.b64p() {
+                rex.set_w();
+            }
+            if to.rexp() {
+                rex.set_b();
+            }
+
+            self.emitter.emit_byte(*rex);
+        }
+
+        let opcode = if to.b8p() {
+            0xb0 + to.value()
+        } else if imm.b64p() || !to.b64p() {
+            0xb8 + to.value()
+        } else {
+            0xc7
+        };
+        self.emitter.emit_byte(opcode);
+
+        if to.b64p() && !imm.b64p() {
+            let modrm = ModRM::new().mod_direct().rm_reg(to);
+            self.emitter.emit_byte(*modrm);
+        }
+        self.emitter.emit_imm(imm);
+    }
+
+    pub fn mov_reg_reg(&mut self, to: Register, from: Register) {
+        assert!(to.matches_reg(from));
+
+        if to.b16p() {
+            self.emitter.emit_byte(*OSO::new());
+        }
+
+        if to.b64p() || to.rexp() || from.rexp() {
+            let mut rex = REX::new();
+            if to.b64p() {
+                rex.set_w();
+            }
             if to.rexp() {
                 rex.set_b();
             }
@@ -147,7 +203,19 @@ impl Assembler {
         }
 
         // mov
-        self.emitter.emit_byte(0x89);
+        let opcode = if to.b8p() {
+            0x88
+        } else {
+            0x89
+        };
+
+        self.emitter.emit_byte(opcode);
+
+        let modrm = ModRM::new()
+            .mod_direct()
+            .reg_reg(from)
+            .rm_reg(to);
+
         self.emitter.emit_byte(*modrm);
     }
 
@@ -378,6 +446,7 @@ impl Assembler {
 
 #[cfg(test)]
 mod tests {
+    use asm_syntax::parser::Immediate;
     use super::*;
 
     #[test]
@@ -409,17 +478,19 @@ mod tests {
         asm.sub_reg_u8(Register::Rsp, 8);
         asm.ret();
         assert_eq!(code, asm.finish());
+        */
 
         let code = vec![0xff, 0xd0, // call *rax
                         0x41, 0xff, 0xd0, // call *r8
                         0x48, 0xb8, 0x05, 0, 0, 0, 0, 0, 0, 0, // movabs 5, rax
         ];
         let mut asm = Assembler::new();
-        asm.call(Register::Rax);
-        asm.call(Register::R8);
-        asm.mov_reg_i64(Register::Rax, 5);
+        asm.call_addr(Register::RAX);
+        asm.call_addr(Register::R8);
+        asm.mov_reg_imm(Register::RAX, Immediate::I64(5));
         assert_eq!(code, asm.finish());
 
+        /*
         let code = vec![0x48, 0x39, 0xfa, // cmp rdi, rdx
                         0x74, 0x09, // je ELSE
                         0x48, 0xc7, 0xc0, 5, 0, 0, 0, // mov 5, rax
@@ -444,38 +515,38 @@ mod tests {
         //asm.jmp(-9);
         asm.jmp("DONE");
         assert_eq!(code, asm.finish());
+        */
 
-        let code = vec![0x48, 0x89, 0x07, // mov rax, (rdi)
-                        0x48, 0x8b, 0x07, // mov (rdi), rax
-                        0x48, 0x83, 0, 0x08, // add 8, (rax)
-                        0x48, 0x83, 0x28, 0x08, // sub 8, (rax)
-                        0xc6, 0x04, 0x24, 0x48, // movb 48, (rsp)
+        let code = vec![//0x48, 0x89, 0x07, // mov rax, (rdi)
+                        //0x48, 0x8b, 0x07, // mov (rdi), rax
+                        //0x48, 0x83, 0, 0x08, // add 8, (rax)
+                        //0x48, 0x83, 0x28, 0x08, // sub 8, (rax)
+                        //0xc6, 0x04, 0x24, 0x48, // movb 48, (rsp)
                         0x4d, 0x89, 0xc1, // mov r8, r9
         ];
         let mut asm = Assembler::new();
-        asm.mov_addr_reg(Register::Rdi, Register::Rax);
-        asm.mov_reg_addr(Register::Rax, Register::Rdi);
-        asm.add_addr_u8(Register::Rax, 8);
-        asm.sub_addr_u8(Register::Rax, 8);
-        asm.mov_addr_u8(Register::Rsp, 0x48);
+        //asm.mov_addr_reg(Register::Rdi, Register::Rax);
+        //asm.mov_reg_addr(Register::Rax, Register::Rdi);
+        //asm.add_addr_u8(Register::Rax, 8);
+        //asm.sub_addr_u8(Register::Rax, 8);
+        //asm.mov_addr_u8(Register::Rsp, 0x48);
         asm.mov_reg_reg(Register::R9, Register::R8);
         assert_eq!(code, asm.finish());
-        */
 
         let code = vec![0x4d, 0x89, 0xc1,
                         0x89, 0xd8,
-                        //0x45, 0x89, 0xc1,
+                        0x45, 0x89, 0xc1,
                         0x48, 0x83, 0xec, 8, // sub 8, rsp
-                        0xc6, 0x04, 0x24, 0x48,
+                        //0xc6, 0x04, 0x24, 0x48,
                         0x48, 0xc7, 0xc0, 1, 0, 0, 0,
         ];
         let mut asm = Assembler::new();
         asm.mov_reg_reg(Register::R9, Register::R8);
         asm.mov_reg_reg(Register::EAX, Register::EBX);
-        //asm.mov_reg_reg(Register::R9D, Register::R8D);
+        asm.mov_reg_reg(Register::R9D, Register::R8D);
         asm.sub_reg_u8(Register::RSP, 8);
-        asm.mov_addr_u8(Register::RSP, 72);
-        asm.mov_reg_i32(Register::RAX, 1);
+        //asm.mov_addr_u8(Register::RSP, 72);
+        asm.mov_reg_imm(Register::RAX, Immediate::I32(1));
         assert_eq!(code, asm.finish());
     }
 }

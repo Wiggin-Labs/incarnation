@@ -6,18 +6,20 @@ mod emitter;
 #[macro_use]
 mod macros;
 mod modrm;
+mod oso;
 mod register;
 mod rex;
 mod sib;
 
 use emitter::Emitter;
 
-use asm_syntax::parser::{Constant, Instruction, Operand};
+use asm_syntax::parser::{Constant, Immediate, Instruction, Operand};
 
 use std::fmt::{self, Display, Formatter};
 
 pub use assembler::Assembler;
 pub use modrm::ModRM;
+pub use oso::OSO;
 pub use register::Register;
 pub use rex::REX;
 pub use sib::SIB;
@@ -97,6 +99,23 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                     //}
                     Operand::Constant(ty, t) => {
                         let t = t.as_str(input);
+                        let imm = match ty {
+                            Constant::U8 => Immediate::U8(t.parse::<u8>()?),
+                            Constant::U16 => Immediate::U16(t.parse::<u16>()?),
+                            Constant::U32 => Immediate::U32(t.parse::<u32>()?),
+                            Constant::U64 => Immediate::U64(t.parse::<u64>()?),
+                            Constant::I8 => Immediate::I8(t.parse::<i8>()?),
+                            Constant::I16 => Immediate::I16(t.parse::<i16>()?),
+                            Constant::I32 => Immediate::I32(t.parse::<i32>()?),
+                            Constant::I64 => Immediate::I64(t.parse::<i64>()?),
+                        };
+
+                        if to.is_address() {
+                            //asm.mov_addr_imm(to_register, imm);
+                        } else {
+                            asm.mov_reg_imm(to_register, imm);
+                        }
+                        /*
                         match ty {
                             Constant::U8 => if to.is_address() {
                                 //asm.mov_addr_u8(to_register, to.unwrap_disp(), t.parse::<u8>()?);
@@ -140,6 +159,7 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                                 asm.mov_reg_i64(to_register, t.parse::<i64>()?);
                             },
                         }
+                        */
                     }
                 }
             }

@@ -110,6 +110,52 @@ pub enum Constant {
     I64,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Immediate {
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64),
+}
+
+impl Immediate {
+    pub fn b64p(&self) -> bool {
+        use self::Immediate::*;
+        match self {
+            U64(_) | I64(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn b32p(&self) -> bool {
+        use self::Immediate::*;
+        match self {
+            U32(_) | I32(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn b16p(&self) -> bool {
+        use self::Immediate::*;
+        match self {
+            U16(_) | I16(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn b8p(&self) -> bool {
+        use self::Immediate::*;
+        match self {
+            U8(_) | I8(_) => true,
+            _ => false,
+        }
+    }
+}
+
 impl Constant {
     pub fn unsignedp(self) -> bool {
         use self::Constant::*;

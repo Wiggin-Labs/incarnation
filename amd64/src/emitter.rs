@@ -1,3 +1,4 @@
+use asm_syntax::parser::Immediate;
 use byteorder::{LittleEndian, WriteBytesExt};
 
 pub struct Emitter(Vec<u8>);
@@ -11,6 +12,20 @@ impl Emitter {
         self.0.append(&mut other);
     }
 
+    pub fn emit_imm(&mut self, imm: Immediate) {
+        use asm_syntax::parser::Immediate::*;
+        match imm {
+            U8(i) => self.emit_byte(i),
+            I8(i) => self.emit_byte(i as u8),
+            U16(i) => self.emit_u16(i),
+            I16(i) => self.emit_u16(i as u16),
+            U32(i) => self.emit_u32(i),
+            I32(i) => self.emit_u32(i as u32),
+            U64(i) => self.emit_u64(i),
+            I64(i) => self.emit_u64(i as u64),
+        }
+    }
+
     pub fn emit_byte(&mut self, b: u8) {
         self.0.push(b);
     }
@@ -20,6 +35,10 @@ impl Emitter {
         self.0.extend_from_slice(b);
     }
     */
+
+    pub fn emit_u16(&mut self, b: u16) {
+        self.0.write_u16::<LittleEndian>(b).unwrap();
+    }
 
     pub fn emit_u32(&mut self, b: u32) {
         self.0.write_u32::<LittleEndian>(b).unwrap();
