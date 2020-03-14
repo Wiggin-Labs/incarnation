@@ -1,6 +1,7 @@
 use Register;
 
 /// Represents the ModR/M byte.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq)]
 pub struct ModRM(u8);
 deref!(ModRM, u8);
 
@@ -17,6 +18,15 @@ impl ModRM {
 
     pub fn mod_direct(self) -> Self {
         self.mod_(0b11)
+    }
+
+    // TODO: can this be 0b10 as well?
+    pub fn mod_indirect(self) -> Self {
+        self.mod_(0b01)
+    }
+
+    pub fn set_mod_indirect(&mut self) {
+        *self = self.mod_indirect();
     }
 
     // TODO: make const when if is allowed

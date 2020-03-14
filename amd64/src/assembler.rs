@@ -1,4 +1,4 @@
-use {Emitter, ModRM, OSO, Register, REX, SIB};
+use {ASO, Emitter, ModRM, OSO, Register, REX, SIB};
 
 use asm_syntax::parser::{Displacement, Immediate};
 
@@ -260,29 +260,80 @@ impl Assembler {
         self.emitter.emit_byte(imm);
     }
 
-    /*
-    pub fn mov_reg_addr(&mut self, to: Register, addr: Register) {
-        let mut rex = REX::new().w();
+    pub fn mov_reg_addr(&mut self, to: Register, addr: Register, displacement: Option<Displacement>) {
+        assert!(addr.b64p() || addr.b32p());
+
+        if addr.b32p() {
+            self.emitter.emit_byte(*ASO::new());
+        }
+
+        if to.b64p() || to.rexp() || addr.rexp() {
+            let mut rex = REX::new();
+            if to.b64p() {
+                rex.set_w();
+            }
+            if to.rexp() {
+                rex.set_b();
+            }
+            if addr.rexp() {
+                rex.set_r();
+            }
+            self.emitter.emit_byte(*rex);
+        }
+
         // NOTE that 0x8b switches the order from 0x89 in mov_addr_reg
-        let modrm = ModRM::new()
-            .rm_reg(addr, &mut rex)
-            .reg_addr(to, &mut rex);
-        self.emitter.emit_byte(*rex);
         self.emitter.emit_byte(0x8b);
+
+        let mut modrm = ModRM::new()
+            .reg_addr(to)
+            .rm_reg(addr);
+        if displacement.is_some() {
+            modrm.set_mod_indirect();
+        }
         self.emitter.emit_byte(*modrm);
+
+        if displacement.is_some() {
+            self.emitter.emit_displacement(displacement.unwrap());
+        }
     }
 
-    pub fn mov_addr_reg(&mut self, addr: Register, from: Register) {
-        let mut rex = REX::new().w();
-        let modrm = ModRM::new()
-            .rm_addr(addr, &mut rex)
-            .reg_reg(from, &mut rex);
+    pub fn mov_addr_reg(&mut self, addr: Register, from: Register, displacement: Option<Displacement>) {
+        assert!(addr.b64p() || addr.b32p());
 
-        self.emitter.emit_byte(*rex);
+        if addr.b32p() {
+            self.emitter.emit_byte(*ASO::new());
+        }
+
+        if from.b64p() || from.rexp() || addr.rexp() {
+            let mut rex = REX::new();
+            if from.b64p() {
+                rex.set_w();
+            }
+            if from.rexp() {
+                rex.set_b();
+            }
+            if addr.rexp() {
+                rex.set_r();
+            }
+            self.emitter.emit_byte(*rex);
+        }
+
         self.emitter.emit_byte(0x89);
+
+        let mut modrm = ModRM::new()
+            .reg_reg(from)
+            .rm_addr(addr);
+        if displacement.is_some() {
+            modrm.set_mod_indirect();
+        }
         self.emitter.emit_byte(*modrm);
+
+        if displacement.is_some() {
+            self.emitter.emit_displacement(displacement.unwrap());
+        }
     }
 
+    /*
     pub fn add_reg_reg(&mut self, to: Register, from: Register) {
         let mut rex = REX::new().w();
         let modrm = ModRM::new().mod_(0b11)

@@ -1,10 +1,12 @@
 extern crate asm_syntax;
 extern crate byteorder;
 
-mod assembler;
-mod emitter;
 #[macro_use]
 mod macros;
+
+mod aso;
+mod assembler;
+mod emitter;
 mod modrm;
 mod oso;
 mod register;
@@ -17,6 +19,7 @@ use asm_syntax::parser::{Constant, Immediate, Instruction, Operand};
 
 use std::fmt::{self, Display, Formatter};
 
+pub use aso::ASO;
 pub use assembler::Assembler;
 pub use modrm::ModRM;
 pub use oso::OSO;
