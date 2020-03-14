@@ -1,8 +1,6 @@
 use super::{Index, TokenizeError, Token};
 use super::Token as T;
 
-use regex::Regex;
-
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -74,7 +72,7 @@ impl<'a> Tokenizer<'a> {
                 },
                 c if c.is_whitespace() => {}
                 '.' => self.parse_ambiguous()?,
-                '0' ..= '9' | '+' | '-' => self.parse_ambiguous()?,
+                '0' ..= '9' | '+' | '-' | 'i' | 'n' | 'f' | 'N' | 'a' => self.parse_ambiguous()?,
                 _ => {
                     let start = self.position;
                     if '\\' == c && self.next().is_none() {
@@ -92,7 +90,7 @@ impl<'a> Tokenizer<'a> {
 
         while let Some(c) = self.next() {
             match c {
-                '0' ..= '9' | '+' | '-' | '/' | '.' | 'e' | 'i' => (),
+                '0' ..= '9' | '+' | '-' | '/' | '.' | 'e' | 'i' | 'n' | 'f' | 'N' | 'a' => (),
                 '(' | '{' | '[' | '<' => {
                     self.distinguish_ambiguous(start)?;
                     match c {
@@ -127,12 +125,6 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn distinguish_ambiguous(&mut self, start: usize) -> TokenizeResult {
-        lazy_static! {
-            static ref INTEGER: Regex = Regex::new(r"^([+-]?\d+)$").unwrap();
-            static ref REAL: Regex = Regex::new(r"^([+-]?\d*\.?\d+(?:[eE][-+]?\d+)?)$").unwrap();
-        }
-
-
         let end = if self.raw_input.len() == self.position {
             self.position
         } else {
@@ -143,9 +135,9 @@ impl<'a> Tokenizer<'a> {
         let buf = &self.raw_input[start-1..end];
         let index = Index::new(start, end);
 
-        if INTEGER.is_match(&buf) {
+        if intp(buf) {
             self.tokens.push(T::Integer(index));
-        } else if REAL.is_match(&buf) {
+        } else if floatp(buf) {
             self.tokens.push(T::Float(index));
         } else {
             self.tokens.push(T::Symbol(index));
@@ -262,4 +254,68 @@ fn is_delimiter(c: char) -> bool {
         '"' | ';' => true,
         _ => false,
     }
+}
+
+fn intp(input: &str) -> bool {
+    let input = if input.as_bytes()[0] == b'+' || input.as_bytes()[0] == b'-' {
+        &input[1..]
+    } else {
+        input
+    };
+
+    // Needed in case `input` is just a sign
+    if input.len() == 0 {
+        return false;
+    }
+
+    for ch in input.chars() {
+        match ch {
+            '0' ..= '9' => (),
+            _ => return false,
+        }
+    }
+
+    true
+}
+
+fn floatp(input: &str) -> bool {
+    let input = if input.as_bytes()[0] == b'+' || input.as_bytes()[0] == b'-' {
+        &input[1..]
+    } else {
+        input
+    };
+
+    // Needed in case `input` is just a sign
+    if input.len() == 0 {
+        return false;
+    }
+
+    if input == "NaN" || input == "inf" {
+        return true;
+    }
+
+    let mut decimal = false;
+    let mut exponent = false;
+    let mut chars = input.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match ch {
+            '0' ..= '9' => (),
+            'e' if !exponent => {
+                exponent = true;
+                if let Some(&ch) = chars.peek() {
+                    // Skip over any sign characters for the exponent
+                    if ch == '+' || ch == '-' {
+                        chars.next();
+                    }
+                } else {
+                    // Ran out of input with no exponent specified
+                    return false;
+                }
+            }
+            '.' if !decimal && !exponent => decimal = true,
+            _ => return false,
+        }
+    }
+
+    true
 }

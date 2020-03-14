@@ -1,5 +1,3 @@
-use string_interner::{DefaultStringInterner, Sym};
-
 #[derive(Copy, Clone, Debug, PartialEq, is_enum_variant)]
 pub enum Token {
     /// (
@@ -90,6 +88,8 @@ impl Token {
         &input[start..end]
     }
 
+    // TODO: not sure this is the right place for this
+    /*
     pub fn as_symbol(&self, input: &str, symbols: &mut DefaultStringInterner) -> Sym {
         let Index { start, end } = self.index();
         let symbol = &input[start..end];
@@ -111,6 +111,7 @@ impl Token {
 
         symbols.get_or_intern(buf)
     }
+    */
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
