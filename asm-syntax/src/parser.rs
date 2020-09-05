@@ -123,6 +123,19 @@ pub enum Immediate {
 }
 
 impl Immediate {
+    pub fn from(t: &str, ty: Constant) -> Result<Self, std::num::ParseIntError> {
+        Ok(match ty {
+            Constant::U8 => Immediate::U8(t.parse::<u8>()?),
+            Constant::U16 => Immediate::U16(t.parse::<u16>()?),
+            Constant::U32 => Immediate::U32(t.parse::<u32>()?),
+            Constant::U64 => Immediate::U64(t.parse::<u64>()?),
+            Constant::I8 => Immediate::I8(t.parse::<i8>()?),
+            Constant::I16 => Immediate::I16(t.parse::<i16>()?),
+            Constant::I32 => Immediate::I32(t.parse::<i32>()?),
+            Constant::I64 => Immediate::I64(t.parse::<i64>()?),
+        })
+    }
+
     pub fn b64p(&self) -> bool {
         use self::Immediate::*;
         match self {

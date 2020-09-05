@@ -15,7 +15,7 @@ mod sib;
 
 use emitter::Emitter;
 
-use asm_syntax::parser::{Constant, Immediate, Instruction, Operand};
+use asm_syntax::parser::{Immediate, Instruction, Operand};
 
 use std::fmt::{self, Display, Formatter};
 
@@ -90,10 +90,10 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                             //(true, true) =>
                             //    asm.mov_addr_addr(to_register, to.unwrap_disp(),
                             //                      from_register, from.unwrap_disp()),
-                            //(true, false) =>
-                            //    asm.mov_addr_reg(to_register, to.unwrap_disp(), from_register),
-                            //(false, true) =>
-                            //    asm.mov_reg_addr(to_register, from_register, from.unwrap_disp()),
+                            (true, false) =>
+                                asm.mov_addr_reg(to_register, from_register, to.unwrap_disp()),
+                            (false, true) =>
+                                asm.mov_reg_addr(to_register, from_register, from.unwrap_disp()),
                             (false, false) => asm.mov_reg_reg(to_register, from_register),
                             _ => todo!(),
                         }
@@ -102,67 +102,13 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                     //}
                     Operand::Constant(ty, t) => {
                         let t = t.as_str(input);
-                        let imm = match ty {
-                            Constant::U8 => Immediate::U8(t.parse::<u8>()?),
-                            Constant::U16 => Immediate::U16(t.parse::<u16>()?),
-                            Constant::U32 => Immediate::U32(t.parse::<u32>()?),
-                            Constant::U64 => Immediate::U64(t.parse::<u64>()?),
-                            Constant::I8 => Immediate::I8(t.parse::<i8>()?),
-                            Constant::I16 => Immediate::I16(t.parse::<i16>()?),
-                            Constant::I32 => Immediate::I32(t.parse::<i32>()?),
-                            Constant::I64 => Immediate::I64(t.parse::<i64>()?),
-                        };
+                        let imm = Immediate::from(t, ty)?;
 
                         if to.is_address() {
-                            //asm.mov_addr_imm(to_register, imm);
+                            asm.mov_addr_imm(to_register, None, imm);
                         } else {
                             asm.mov_reg_imm(to_register, imm);
                         }
-                        /*
-                        match ty {
-                            Constant::U8 => if to.is_address() {
-                                //asm.mov_addr_u8(to_register, to.unwrap_disp(), t.parse::<u8>()?);
-                                asm.mov_addr_u8(to_register, t.parse::<u8>()?);
-                            } else {
-                                //asm.mov_reg_u8(to_register, t.parse::<u8>()?);
-                            },
-                            Constant::U16 => if to.is_address() {
-                                //asm.mov_addr_u16(to_register, to.unwrap_disp(), t.parse::<u16>()?);
-                            } else {
-                                //asm.mov_reg_u16(to_register, t.parse::<u16>()?);
-                            },
-                            Constant::U32 => if to.is_address() {
-                                //asm.mov_addr_u32(to_register, to.unwrap_disp(), t.parse::<u32>()?);
-                            } else {
-                                //asm.mov_reg_u32(to_register, t.parse::<u32>()?);
-                            },
-                            Constant::U64 => if to.is_address() {
-                                //asm.mov_addr_u64(to_register, to.unwrap_disp(), t.parse::<u64>()?);
-                            } else {
-                                asm.mov_reg_u64(to_register, t.parse::<u64>()?);
-                            },
-                            Constant::I8 => if to.is_address() {
-                                //asm.mov_addr_i8(to_register, to.unwrap_disp(), t.parse::<i8>()?);
-                            } else {
-                                //asm.mov_reg_i8(to_register, t.parse::<i8>()?);
-                            },
-                            Constant::I16 => if to.is_address() {
-                                //asm.mov_addr_i16(to_register, to.unwrap_disp(), t.parse::<i16>()?);
-                            } else {
-                                //asm.mov_reg_i16(to_register, t.parse::<i16>()?);
-                            },
-                            Constant::I32 => if to.is_address() {
-                                //asm.mov_addr_i32(to_register, to.unwrap_disp(), t.parse::<i32>()?);
-                            } else {
-                                asm.mov_reg_i32(to_register, t.parse::<i32>()?);
-                            },
-                            Constant::I64 => if to.is_address() {
-                                //asm.mov_addr_i64(to_register, to.unwrap_disp(), t.parse::<i64>()?);
-                            } else {
-                                asm.mov_reg_i64(to_register, t.parse::<i64>()?);
-                            },
-                        }
-                        */
                     }
                 }
             }
@@ -185,6 +131,26 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                     } else {
                         unreachable!();
                     }
+                } else {
+                    unreachable!();
+                }
+            }
+            "push" => {
+                assert!(instruction.operands.len() == 1);
+                let from = instruction.operands[0];
+                if let Operand::Register(t) = from {
+                    let from = Register::from_str(t.as_str(input)).unwrap();
+                    asm.push_reg(from);
+                } else {
+                    unreachable!();
+                }
+            }
+            "pop" => {
+                assert!(instruction.operands.len() == 1);
+                let to = instruction.operands[0];
+                if let Operand::Register(t) = to {
+                    let to = Register::from_str(t.as_str(input)).unwrap();
+                    asm.pop_reg(to);
                 } else {
                     unreachable!();
                 }
