@@ -1,0 +1,7 @@
+[package]
+name = "parser"
+version = "0.1.0"
+authors = ["Hunter Praska <hunter@wiggin-labs.com>"]
+
+[dependencies.tokenizer]
+path = "../tokenizer"

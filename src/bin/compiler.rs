@@ -1,6 +1,7 @@
 extern crate amd64;
 extern crate asm_syntax;
 extern crate incarnation;
+extern crate parser;
 extern crate tokenizer;
 
 //use incarnation::{amd64, assembly};
@@ -64,9 +65,38 @@ fn main() {
     (mov rdi (i32 0))
     (syscall)
     ";
+    let input = r"
+    (mov rcx 35)
+    (label get-digit)
+        (= rcx (i32 0))
+    (label print-digit)
+        (
+        ;; length
+        (mov rdx (i32 1))
+        (syscall)
+    (mov rax (i32 231))
+    (mov rdi (i32 0))
+    (syscall)
+    ";
+    /*
     let tokens = tokenizer::Tokenizer::tokenize(input).unwrap();
     let instructions = asm_syntax::parser::parse(&tokens, input, false).unwrap();
     //let instructions = assembly::parse(&tokens, input, false).unwrap();
     let code = amd64::assemble(instructions, input).unwrap();
     incarnation::executable::generate_executable("test.o".into(), code);
+    */
+
+    let input = r#"
+    (include libs/unix/lib.inc)
+    (defn (main ())
+      (exit 5))
+    "#;
+    let tokens = tokenizer::Tokenizer::tokenize(input).unwrap();
+    let ast = parser::parse(tokens, input).unwrap();
+    println!("{:?}", ast);
+
+    let input = include_str!("../../libs/unix/lib.inc");
+    let tokens = tokenizer::Tokenizer::tokenize(input).unwrap();
+    let ast = parser::parse(tokens, input).unwrap();
+    println!("{:?}", ast);
 }

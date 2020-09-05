@@ -15,3 +15,6 @@ path = "asm-syntax"
 
 [dependencies.tokenizer]
 path = "tokenizer"
+
+[dependencies.parser]
+path = "parser"
