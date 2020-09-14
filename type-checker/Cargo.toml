@@ -1,0 +1,10 @@
+[package]
+name = "type-checker"
+version = "0.1.0"
+authors = ["Hunter Praska <hunter@wiggin-labs.com>"]
+
+[dependencies.parser]
+path = "../parser"
+
+[dependencies.string-interner]
+path = "../string-interner"

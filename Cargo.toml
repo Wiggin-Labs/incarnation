@@ -13,8 +13,11 @@ path = "amd64"
 [dependencies.asm-syntax]
 path = "asm-syntax"
 
+[dependencies.parser]
+path = "parser"
+
 [dependencies.tokenizer]
 path = "tokenizer"
 
-[dependencies.parser]
-path = "parser"
+[dependencies.type-checker]
+path = "type-checker"

@@ -3,6 +3,7 @@ extern crate asm_syntax;
 extern crate incarnation;
 extern crate parser;
 extern crate tokenizer;
+extern crate type_checker;
 
 //use incarnation::{amd64, assembly};
 
@@ -93,10 +94,10 @@ fn main() {
     "#;
     let tokens = tokenizer::Tokenizer::tokenize(input).unwrap();
     let ast = parser::parse(tokens, input).unwrap();
-    println!("{:?}", ast);
 
     let input = include_str!("../../libs/unix/lib.inc");
     let tokens = tokenizer::Tokenizer::tokenize(input).unwrap();
     let ast = parser::parse(tokens, input).unwrap();
-    println!("{:?}", ast);
+    type_checker::type_check(ast).unwrap();
+    println!("Ok");
 }
