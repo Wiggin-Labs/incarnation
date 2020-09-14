@@ -387,25 +387,15 @@ fn read_type(tokens: &mut Tokens, input: &str) -> Result<Type> {
 fn handle_application(t: Token, tokens: &mut Tokens, input: &str) -> Result<Ast> {
     let mut application = Vec::new();
     application.push(Ast::Identifier(get_symbol!(t, input)));
-    while let Some(token) = tokens.next() {
-        match token {
-            t if t.closerp() => return Ok(Ast::Application(application)),
-            t if t.openerp() => application.push(parse_paren_expr(tokens, input)?),
-            t @ Token::Symbol(_) => application.push(Ast::Identifier(get_symbol!(t, input))),
-            t @ Token::Integer(_) => {
-                // TODO: should check that this integer can be represented at compile time
-                let t = t.as_str(input).parse::<i32>().unwrap();
-                application.push(Ast::Primitive(CompilePrimitive::Integer(t)));
-            },
-            t @ Token::String(_) => {
-                let t = t.as_str(input).to_string();
-                application.push(Ast::Primitive(CompilePrimitive::String(t)));
-            }
-            _ => todo!(),
+    while let Some(expr) = parse_expr(tokens, input)? {
+        if expr.is_identifier() || expr.is_primitive() || expr.is_application() {
+            application.push(expr);
+        } else {
+            return Err(ParserError::Value);
         }
     }
 
-    Err(ParserError::EOI)
+    Ok(Ast::Application(application))
 }
 
 fn handle_include(tokens: &mut Tokens, input: &str) -> Result<Ast> {
