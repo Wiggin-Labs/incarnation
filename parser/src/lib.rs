@@ -248,7 +248,10 @@ fn handle_define(tokens: &mut Tokens, input: &str) -> Result<Ast> {
     });
 
     let value = if let Some(expr) = parse_expr(tokens, input)? {
-        expr
+        match expr {
+            Ast::Identifier(_) | Ast::Primitive(_) | Ast::Application(_) => expr,
+            _ => return Err(ParserError::Value),
+        }
     } else {
         return Err(ParserError::Closer);
     };
@@ -331,12 +334,22 @@ fn handle_defn(tokens: &mut Tokens, input: &str) -> Result<Ast> {
     while let Some(expr) = parse_expr(tokens, input)? {
         if expr.is_identifier() || expr.is_primitive() {
             if !tokens.peek().map(|t| t.closerp()).unwrap_or(false) {
-                // TODO: this error should signify that an identifier or primitive can only exist
-                // as the last item in a procedure
-                return Err(ParserError::Token);
+                return Err(ParserError::NonfinalValue);
+            }
+        } else if expr.is_asm() {
+            if body.len() != 0 || !tokens.peek().map(|t| t.closerp()).unwrap_or(false) {
+                return Err(ParserError::Asm);
             }
         }
         body.push(expr);
+    }
+
+    if let Some(l) = body.last() {
+        if (l.is_define() || l.is_defn() || l.is_include()) && ret_ty != Type::Empty {
+            return Err(ParserError::ReturnType);
+        }
+    } else if ret_ty != Type::Empty {
+        return Err(ParserError::ReturnType);
     }
 
     let ty = Type::Arrow(args.iter().map(|arg| arg.ty.clone()).collect(), Box::new(ret_ty.clone()));
