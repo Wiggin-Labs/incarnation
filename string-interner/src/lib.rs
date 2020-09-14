@@ -40,7 +40,7 @@ impl StringInterner {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Hash)]
 pub struct Symbol(usize);
 
 impl Symbol {

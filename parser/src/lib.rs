@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate derive_is_enum_variant;
 extern crate string_interner;
 extern crate tokenizer;
 
@@ -10,23 +12,31 @@ use tokenizer::Token;
 
 pub type Result<T> = std::result::Result<T, ParserError>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, is_enum_variant)]
 pub enum Ast {
     Include(Symbol),
-    Define{
+    Define {
         name: Symbol,
         ty: Type,
         value: Box<Ast>
+    },
+    Defn {
+        name: Symbol,
+        ty: Type,
+        args: Vec<Arg>,
+        body: Vec<Ast>,
     },
     Primitive(CompilePrimitive),
     Asm(Vec<Token>),
     Application(Vec<Ast>),
     Identifier(Symbol),
+    /*
     Lambda {
         args: Vec<Arg>,
         ret_ty: Type,
         body: Vec<Ast>,
     }
+    */
 }
 
 impl Ast {
@@ -34,8 +44,8 @@ impl Ast {
         use Ast::*;
         match self {
             Identifier(_) => Type::Hole,
-            Lambda { args, ret_ty, .. } =>
-                Type::Arrow(args.iter().map(|arg| arg.ty.clone()).collect(), Box::new(ret_ty.clone())),
+            //Lambda { args, ret_ty, .. } =>
+            //    Type::Arrow(args.iter().map(|arg| arg.ty.clone()).collect(), Box::new(ret_ty.clone())),
             Application(v) => v[0].ty(),
             Primitive(p) => p.ty(),
             _ => todo!(),
@@ -43,14 +53,14 @@ impl Ast {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Arg {
-    name: Token,
-    ty: Type,
+    pub name: Symbol,
+    pub ty: Type,
 }
 
 impl Arg {
-    pub fn new(name: Token, ty: Type) -> Self {
+    pub fn new(name: Symbol, ty: Type) -> Self {
         Arg {
             name: name,
             ty: ty,
@@ -58,7 +68,7 @@ impl Arg {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, is_enum_variant)]
 pub enum Type {
     U8,
     Usize,
@@ -87,9 +97,16 @@ impl Type {
             _ => todo!(),
         }
     }
+
+    pub fn arrow_split(&self) -> (Vec<Self>, Self) {
+        match self {
+            Type::Arrow(args, ty) => (args.clone(), *ty.clone()),
+            _ => unreachable!(),
+        }
+    }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum CompilePrimitive {
     Integer(i32),
     String(String),
@@ -115,6 +132,7 @@ pub fn parse(tokens: Vec<Token>, input: &str) -> Result<Vec<Ast>> {
             match expr {
                 Ast::Include(_) => ast.push(expr),
                 Ast::Define { .. } => ast.push(expr),
+                Ast::Defn { .. } => ast.push(expr),
                 _ => return Err(ParserError::Item),
             }
         } else {
@@ -282,7 +300,7 @@ fn handle_defn(tokens: &mut Tokens, input: &str) -> Result<Ast> {
 
         let arg_name = next!(token, tokens, {
             if token.is_symbol() {
-                token
+                get_symbol!(token, input)
             } else {
                 return Err(ParserError::Token);
             }
@@ -311,19 +329,22 @@ fn handle_defn(tokens: &mut Tokens, input: &str) -> Result<Ast> {
 
     let mut body = Vec::new();
     while let Some(expr) = parse_expr(tokens, input)? {
+        if expr.is_identifier() || expr.is_primitive() {
+            if !tokens.peek().map(|t| t.closerp()).unwrap_or(false) {
+                // TODO: this error should signify that an identifier or primitive can only exist
+                // as the last item in a procedure
+                return Err(ParserError::Token);
+            }
+        }
         body.push(expr);
     }
 
     let ty = Type::Arrow(args.iter().map(|arg| arg.ty.clone()).collect(), Box::new(ret_ty.clone()));
-    let func = Ast::Lambda {
-        args: args,
-        ret_ty: ret_ty,
-        body: body,
-    };
-    Ok(Ast::Define{
+    Ok(Ast::Defn {
         name: name,
         ty: ty,
-        value: Box::new(func),
+        args: args,
+        body: body,
     })
 }
 
