@@ -3,5 +3,8 @@ name = "parser"
 version = "0.1.0"
 authors = ["Hunter Praska <hunter@wiggin-labs.com>"]
 
+[dependencies.string-interner]
+path = "../string-interner"
+
 [dependencies.tokenizer]
 path = "../tokenizer"

@@ -5,6 +5,7 @@ pub enum ParserError {
     EOI,
     Closer,
     Token,
+    Item,
 }
 
 impl Display for ParserError {
@@ -13,6 +14,7 @@ impl Display for ParserError {
             ParserError::EOI => write!(f, "Unexpected end of input"),
             ParserError::Closer => write!(f, "Expected closer"),
             ParserError::Token => write!(f, "Unexpected token"),
+            ParserError::Item => write!(f, "Expected item"),
         }
     }
 }

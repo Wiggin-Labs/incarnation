@@ -1,28 +1,45 @@
+extern crate string_interner;
 extern crate tokenizer;
 
 mod error;
 
 pub use error::ParserError;
 
+use string_interner::{INTERNER, Symbol};
 use tokenizer::Token;
 
 pub type Result<T> = std::result::Result<T, ParserError>;
 
 #[derive(Debug)]
 pub enum Ast {
-    Include(Token),
+    Include(Symbol),
     Define{
-        name: Token,
+        name: Symbol,
+        ty: Type,
         value: Box<Ast>
     },
     Primitive(CompilePrimitive),
     Asm(Vec<Token>),
     Application(Vec<Ast>),
-    Identifier(Token),
+    Identifier(Symbol),
     Lambda {
         args: Vec<Arg>,
-        ret_ty: Option<Type>,
+        ret_ty: Type,
         body: Vec<Ast>,
+    }
+}
+
+impl Ast {
+    pub fn ty(&self) -> Type {
+        use Ast::*;
+        match self {
+            Identifier(_) => Type::Hole,
+            Lambda { args, ret_ty, .. } =>
+                Type::Arrow(args.iter().map(|arg| arg.ty.clone()).collect(), Box::new(ret_ty.clone())),
+            Application(v) => v[0].ty(),
+            Primitive(p) => p.ty(),
+            _ => todo!(),
+        }
     }
 }
 
@@ -41,16 +58,22 @@ impl Arg {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Type {
     U8,
     Usize,
     I32,
+    Bool,
+    String,
     Ptr(Box<Type>),
+    /// Function type
+    Arrow(Vec<Type>, Box<Type>),
     /// ()
     Empty,
     /// !
     Never,
+    /// Type not known yet
+    Hole,
 }
 
 impl Type {
@@ -73,26 +96,31 @@ pub enum CompilePrimitive {
     Bool(bool),
 }
 
+impl CompilePrimitive {
+    pub fn ty(&self) -> Type {
+        use CompilePrimitive::*;
+        match self {
+            Integer(_) => Type::I32,
+            String(_) => Type::String,
+            Bool(_) => Type::Bool,
+        }
+    }
+}
+
 pub fn parse(tokens: Vec<Token>, input: &str) -> Result<Vec<Ast>> {
     let mut ast = Vec::new();
     let mut tokens = Tokens::new(tokens);
     while tokens.peek().is_some() {
         if let Some(expr) = parse_expr(&mut tokens, input)? {
-            ast.push(expr);
+            match expr {
+                Ast::Include(_) => ast.push(expr),
+                Ast::Define { .. } => ast.push(expr),
+                _ => return Err(ParserError::Item),
+            }
         } else {
             return Err(ParserError::Closer);
         }
     }
-    /*
-    while let Some(token) = tokens.next() {
-        match token {
-            Token::Comment(_) | Token::BlockComment(_) => {},
-            t if t.openerp() => ast.push(parse_expr(&mut tokens, input)?),
-            t if t.closerp() => return Err(ParserError::Closer),
-            _ => return Err(ParserError::Token),
-        }
-    }
-    */
     Ok(ast)
 }
 
@@ -106,13 +134,20 @@ macro_rules! next {
     };
 }
 
+macro_rules! get_symbol {
+    ( $token:ident, $input:ident ) => {
+        INTERNER.lock().unwrap().get_symbol($token.as_str($input).into())
+    };
+}
+
+
 fn parse_expr(tokens: &mut Tokens, input: &str) -> Result<Option<Ast>> {
     next!(token, tokens, {
         match token {
             Token::Comment(_) | Token::BlockComment(_) => parse_expr(tokens, input),
             t if t.closerp() => Ok(None),
             t if t.openerp() => Ok(Some(parse_paren_expr(tokens, input)?)),
-            t @ Token::Symbol(_) => Ok(Some(Ast::Identifier(t))),
+            t @ Token::Symbol(_) => Ok(Some(Ast::Identifier(get_symbol!(t, input)))),
             t @ Token::String(_) => Ok(Some(Ast::Primitive(CompilePrimitive::String(t.as_str(input).into())))),
             // TODO: need to check that this token fits an i32
             t @ Token::Integer(_) => Ok(Some(Ast::Primitive(CompilePrimitive::Integer(t.as_str(input).parse().unwrap())))),
@@ -188,7 +223,7 @@ fn parse_identifier(t: Token, tokens: &mut Tokens, input: &str) -> Result<Ast> {
 fn handle_define(tokens: &mut Tokens, input: &str) -> Result<Ast> {
     let name = next!(t, tokens, {
         if t.is_symbol() {
-            t
+            get_symbol!(t, input)
         } else {
             return Err(ParserError::Token);
         }
@@ -204,6 +239,7 @@ fn handle_define(tokens: &mut Tokens, input: &str) -> Result<Ast> {
 
     Ok(Ast::Define{
         name: name,
+        ty: value.ty(),
         value: Box::new(value),
     })
 }
@@ -217,7 +253,7 @@ fn handle_defn(tokens: &mut Tokens, input: &str) -> Result<Ast> {
 
     let name = next!(token, tokens, {
         if token.is_symbol() {
-            token
+            get_symbol!(token, input)
         } else {
             return Err(ParserError::Token);
         }
@@ -258,14 +294,13 @@ fn handle_defn(tokens: &mut Tokens, input: &str) -> Result<Ast> {
         handle_closer(tokens)?;
 
         args.push(Arg::new(arg_name, arg_type));
-    };
+    }
 
     let ret_ty = if let Some(t) = tokens.peek() {
         if t.closerp() {
-            // TODO: maybe this should be a `()` type?
-            None
+            Type::Empty
         } else {
-            Some(read_type(tokens, input)?)
+            read_type(tokens, input)?
         }
     } else {
         return Err(ParserError::EOI);
@@ -279,6 +314,7 @@ fn handle_defn(tokens: &mut Tokens, input: &str) -> Result<Ast> {
         body.push(expr);
     }
 
+    let ty = Type::Arrow(args.iter().map(|arg| arg.ty.clone()).collect(), Box::new(ret_ty.clone()));
     let func = Ast::Lambda {
         args: args,
         ret_ty: ret_ty,
@@ -286,6 +322,7 @@ fn handle_defn(tokens: &mut Tokens, input: &str) -> Result<Ast> {
     };
     Ok(Ast::Define{
         name: name,
+        ty: ty,
         value: Box::new(func),
     })
 }
@@ -315,12 +352,12 @@ fn read_type(tokens: &mut Tokens, input: &str) -> Result<Type> {
 // Application
 fn handle_application(t: Token, tokens: &mut Tokens, input: &str) -> Result<Ast> {
     let mut application = Vec::new();
-    application.push(Ast::Identifier(t));
+    application.push(Ast::Identifier(get_symbol!(t, input)));
     while let Some(token) = tokens.next() {
         match token {
             t if t.closerp() => return Ok(Ast::Application(application)),
             t if t.openerp() => application.push(parse_paren_expr(tokens, input)?),
-            t @ Token::Symbol(_) => application.push(Ast::Identifier(t)),
+            t @ Token::Symbol(_) => application.push(Ast::Identifier(get_symbol!(t, input))),
             t @ Token::Integer(_) => {
                 // TODO: should check that this integer can be represented at compile time
                 let t = t.as_str(input).parse::<i32>().unwrap();
@@ -337,10 +374,10 @@ fn handle_application(t: Token, tokens: &mut Tokens, input: &str) -> Result<Ast>
     Err(ParserError::EOI)
 }
 
-fn handle_include(tokens: &mut Tokens, _input: &str) -> Result<Ast> {
+fn handle_include(tokens: &mut Tokens, input: &str) -> Result<Ast> {
     let include = next!(t, tokens, {
         if t.is_symbol() {
-            t
+            get_symbol!(t, input)
         } else {
             return Err(ParserError::Token);
         }
