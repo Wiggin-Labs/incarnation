@@ -13,7 +13,7 @@ pub struct Elf {
 
 impl Elf {
     pub fn new(program: Vec<u8>, data: Vec<u8>) -> Self {
-        const shstrtab: &'static [u8] =  b"\0.text\0.data\0.shstrtab\0";
+        let shstrtab = b"\0.text\0.data\0.shstrtab\0";
         let data_offset = 64+56+56+program.len() as u64;
         let p_hdr_size = data_offset;
         let shstrtab_offset = data_offset + data.len() as u64;
@@ -49,43 +49,29 @@ impl Elf {
     }
 }
 
-//const ELF_MAGIC: [u8; 4] = [0x73, b'E', b'L', b'F'];
+type Elf64Addr = u64;
+type Elf64Off = u64;
+type Elf64Half = u16;
+type Elf64Word = u32;
+type Elf64Xword = u64;
 
-type Elf64_Addr = u64;
-type Elf64_Off = u64;
-type Elf64_Half = u16;
-type Elf64_Word = u32;
-type Elf64_Sword = u32;
-type Elf64_Xword = u64;
-type Elf64_Sxword = u64;
-
-const EI_MAG0: usize = 0; // File identification index
-const EI_MAG1: usize = 1; // File identification index
-const EI_MAG2: usize = 2; // File identification index
-const EI_MAG3: usize = 3; // File identification index
-const EI_CLASS: usize = 4; // File class
-const EI_DATA: usize = 5; // Data encoding
-const EI_VERSION: usize = 6; // File version
-const EI_OSABI: usize = 7; // OS/ABI identification
-const EI_ABIVERSION: usize = 8; // ABI version
-const EI_PAD: usize = 9; // Start of padding bytes
 const EI_NIDENT: usize = 16; // Number of bytes in e_ident
 
 struct Elf64Ehdr {
     e_ident: [u8; EI_NIDENT],
-    e_type: Elf64_Half,
-    e_machine: Elf64_Half,
-    e_version: Elf64_Word,
-    e_entry: Elf64_Addr,
-    e_phoff: Elf64_Off,
-    e_shoff: Elf64_Off,
-    e_flags: Elf64_Word,
-    e_ehsize: Elf64_Half,
-    e_phentsize: Elf64_Half,
-    e_phnum: Elf64_Half,
-    e_shentsize: Elf64_Half,
-    e_shnum: Elf64_Half,
-    e_shstrndx: Elf64_Half,
+    e_type: Elf64Half,
+    e_machine: Elf64Half,
+    e_version: Elf64Word,
+    e_entry: Elf64Addr,
+    e_phoff: Elf64Off,
+    e_shoff: Elf64Off,
+    e_flags: Elf64Word,
+    e_ehsize: Elf64Half,
+    e_phentsize: Elf64Half,
+    e_phnum: Elf64Half,
+    e_shentsize: Elf64Half,
+    e_shnum: Elf64Half,
+    e_shstrndx: Elf64Half,
 }
 
 impl Elf64Ehdr {
@@ -148,14 +134,14 @@ impl Elf64Ehdr {
 }
 
 struct Elf64Phdr {
-    p_type: Elf64_Word,
-    p_flags: Elf64_Word,
-    p_offset: Elf64_Off,
-    p_vaddr: Elf64_Addr,
-    p_paddr: Elf64_Addr,
-    p_filesz: Elf64_Xword,
-    p_memsz: Elf64_Xword,
-    p_align: Elf64_Xword,
+    p_type: Elf64Word,
+    p_flags: Elf64Word,
+    p_offset: Elf64Off,
+    p_vaddr: Elf64Addr,
+    p_paddr: Elf64Addr,
+    p_filesz: Elf64Xword,
+    p_memsz: Elf64Xword,
+    p_align: Elf64Xword,
 }
 
 impl Elf64Phdr {
@@ -172,8 +158,6 @@ impl Elf64Phdr {
             p_paddr: 0x400000,
             p_filesz: size,
             p_memsz: size,
-            //p_filesz: 0xd7,
-            //p_memsz: 0xd7,
             p_align: 0x200000,
         }
     }
@@ -186,16 +170,11 @@ impl Elf64Phdr {
             p_flags: 6,
             // offset from beginning of segments
             p_offset: offset,
-            //p_offset: 0xd8,
             // Initial virtual memory address to load this segment to
             p_vaddr: 0x600000 + offset,
             p_paddr: 0x600000 + offset,
-            //p_vaddr: 0x6000d8,
-            //p_paddr: 0x6000d8,
             p_filesz: size,
             p_memsz: size,
-            //p_filesz: 0x0d,
-            //p_memsz: 0x0d,
             p_align: 0x200000,
         }
     }
@@ -215,16 +194,16 @@ impl Elf64Phdr {
 }
 
 struct Elf64Shdr {
-    sh_name: Elf64_Word,
-    sh_type: Elf64_Word,
-    sh_flags: Elf64_Xword,
-    sh_addr: Elf64_Addr,
-    sh_offset: Elf64_Off,
-    sh_size: Elf64_Xword,
-    sh_link: Elf64_Word,
-    sh_info: Elf64_Word,
-    sh_addralign: Elf64_Xword,
-    sh_entsize: Elf64_Xword,
+    sh_name: Elf64Word,
+    sh_type: Elf64Word,
+    sh_flags: Elf64Xword,
+    sh_addr: Elf64Addr,
+    sh_offset: Elf64Off,
+    sh_size: Elf64Xword,
+    sh_link: Elf64Word,
+    sh_info: Elf64Word,
+    sh_addralign: Elf64Xword,
+    sh_entsize: Elf64Xword,
 }
 
 impl Elf64Shdr {
@@ -263,7 +242,6 @@ impl Elf64Shdr {
             sh_name: 0x07,
             sh_type: 1,
             sh_flags: 3,
-            //sh_addr: 0x6000d8,
             sh_addr: 0x600000 + sh_offset,
             sh_offset: sh_offset,
             sh_size: sh_size,
