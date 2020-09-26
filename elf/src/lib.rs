@@ -14,11 +14,8 @@ pub struct Elf {
 impl Elf {
     pub fn new(program: Vec<u8>, data: Vec<u8>) -> Self {
         const shstrtab: &'static [u8] =  b"\0.text\0.data\0.shstrtab\0";
-        let mut data_offset = 64+56+56+program.len() as u64;
+        let data_offset = 64+56+56+program.len() as u64;
         let p_hdr_size = data_offset;
-        if data_offset % 8 != 0 {
-            data_offset += 8 - (data_offset % 8);
-        }
         let shstrtab_offset = data_offset + data.len() as u64;
         let sh_off = shstrtab_offset + shstrtab.len() as u64;
         Elf {
@@ -43,10 +40,6 @@ impl Elf {
             v.append(&mut p.to_vec());
         }
         v.append(&mut program);
-        // TODO
-        //for _ in 0..7 {
-            v.push(0);
-        //}
         v.append(&mut data);
         v.append(&mut shstrtab);
         for s in s_hdr {
@@ -195,8 +188,10 @@ impl Elf64Phdr {
             p_offset: offset,
             //p_offset: 0xd8,
             // Initial virtual memory address to load this segment to
-            p_vaddr: 0x6000d8,
-            p_paddr: 0x6000d8,
+            p_vaddr: 0x600000 + offset,
+            p_paddr: 0x600000 + offset,
+            //p_vaddr: 0x6000d8,
+            //p_paddr: 0x6000d8,
             p_filesz: size,
             p_memsz: size,
             //p_filesz: 0x0d,
@@ -268,7 +263,8 @@ impl Elf64Shdr {
             sh_name: 0x07,
             sh_type: 1,
             sh_flags: 3,
-            sh_addr: 0x6000d8,
+            //sh_addr: 0x6000d8,
+            sh_addr: 0x600000 + sh_offset,
             sh_offset: sh_offset,
             sh_size: sh_size,
             sh_link: 0,
