@@ -79,8 +79,8 @@ impl Elf64Ehdr {
         Elf64Ehdr {
             e_ident: [0x7f, b'E', b'L', b'F', // magic number
                       2, // 1 for 32 bit, 2 for 64bit
+                      1, // endianness - 1 is little-endian
                       1, // version
-                      1, // target operating system abi
                       0, // abi version
                       0, 0, 0, 0, 0, 0, 0, 0], // unused padding
             // object file type: 2 if executable
