@@ -26,6 +26,12 @@ pub enum Ast {
         args: Vec<Arg>,
         body: Vec<Ast>,
     },
+    If {
+        predicate: Box<Ast>,
+        consequent: Box<Ast>,
+        alternative: Option<Box<Ast>>,
+    },
+    Block(Vec<Ast>),
     Primitive(CompilePrimitive),
     Asm(Vec<Token>),
     Application(Vec<Ast>),
@@ -48,6 +54,8 @@ impl Ast {
             //    Type::Arrow(args.iter().map(|arg| arg.ty.clone()).collect(), Box::new(ret_ty.clone())),
             Application(v) => v[0].ty(),
             Primitive(p) => p.ty(),
+            If { consequent, ..  } => consequent.ty(),
+            Block(v) => v.last().map_or(Type::Empty, |e| e.ty()),
             _ => todo!(),
         }
     }
@@ -91,6 +99,8 @@ impl Type {
         match token.as_str(input) {
             "u8" => Type::U8,
             "usize" => Type::Usize,
+            "bool" => Type::Bool,
+            "string" => Type::String,
             "i32" => Type::I32,
             "!" => Type::Never,
             "ptr" if inner_ty.is_some() => Type::Ptr(Box::new(inner_ty.unwrap())),
@@ -128,6 +138,11 @@ pub fn parse(tokens: Vec<Token>, input: &str) -> Result<Vec<Ast>> {
     let mut ast = Vec::new();
     let mut tokens = Tokens::new(tokens);
     while tokens.peek().is_some() {
+        if tokens.peek().unwrap().commentp() {
+            tokens.next();
+            continue;
+        }
+
         if let Some(expr) = parse_expr(&mut tokens, input)? {
             match expr {
                 Ast::Include(_) => ast.push(expr),
@@ -160,9 +175,9 @@ macro_rules! get_symbol {
 
 
 fn parse_expr(tokens: &mut Tokens, input: &str) -> Result<Option<Ast>> {
-    next!(token, tokens, {
+    if let Some(token) = tokens.next() {
         match token {
-            Token::Comment(_) | Token::BlockComment(_) => parse_expr(tokens, input),
+            t if t.commentp() => parse_expr(tokens, input),
             t if t.closerp() => Ok(None),
             t if t.openerp() => Ok(Some(parse_paren_expr(tokens, input)?)),
             t @ Token::Symbol(_) => Ok(Some(Ast::Identifier(get_symbol!(t, input)))),
@@ -172,7 +187,9 @@ fn parse_expr(tokens: &mut Tokens, input: &str) -> Result<Option<Ast>> {
             Token::Pound(_) => Ok(Some(parse_pound(tokens, input)?)),
             _ => todo!(),
         }
-    })
+    } else {
+        Ok(None)
+    }
 }
 
 fn parse_pound(tokens: &mut Tokens, input: &str) -> Result<Ast> {
@@ -194,6 +211,7 @@ fn parse_pound(tokens: &mut Tokens, input: &str) -> Result<Ast> {
 fn parse_paren_expr(tokens: &mut Tokens, input: &str) -> Result<Ast> {
     next!(token, tokens, {
         match token {
+            t if t.commentp() => parse_paren_expr(tokens, input),
             t @ Token::Symbol(_) => return parse_identifier(t, tokens, input),
             Token::Pound(_) => if let Some(t) = tokens.peek() {
                 if t.is_symbol() && t.as_str(input) == "asm" {
@@ -234,8 +252,59 @@ fn parse_identifier(t: Token, tokens: &mut Tokens, input: &str) -> Result<Ast> {
         "include" => handle_include(tokens, input),
         "define" => handle_define(tokens, input),
         "defn" => handle_defn(tokens, input),
+        "if" => handle_if(tokens, input),
+        "begin" => handle_block(tokens, input),
         _ => handle_application(t, tokens, input),
     }
+}
+
+fn handle_block(tokens: &mut Tokens, input: &str) -> Result<Ast> {
+    let mut body = Vec::new();
+    while let Some(expr) = parse_expr(tokens, input)? {
+        body.push(expr);
+    }
+    Ok(Ast::Block(body))
+}
+
+fn handle_if(tokens: &mut Tokens, input: &str) -> Result<Ast> {
+    let predicate = if let Some(expr) = parse_expr(tokens, input)? {
+        match expr {
+            Ast::Identifier(_) | Ast::Primitive(_) | Ast::Application(_) | Ast::If { .. } | Ast::Block(_) => expr,
+            _ => return Err(ParserError::Value),
+        }
+    } else {
+        return Err(ParserError::Closer);
+    };
+
+    let consequent = if let Some(expr) = parse_expr(tokens, input)? {
+        match expr {
+            Ast::Identifier(_) | Ast::Primitive(_) | Ast::Application(_) | Ast::If { .. } | Ast::Block(_) => expr,
+            _ => return Err(ParserError::Value),
+        }
+    } else {
+        return Err(ParserError::Closer);
+    };
+
+    let alternative = if let Some(t) = tokens.peek() {
+        if t.closerp() {
+            None
+        } else {
+            let expr = parse_expr(tokens, input)?.unwrap();
+            match expr {
+                Ast::Identifier(_) | Ast::Primitive(_) | Ast::Application(_) | Ast::If { .. } | Ast::Block(_) => Some(Box::new(expr)),
+                _ => return Err(ParserError::Value),
+            }
+        }
+    } else {
+        return Err(ParserError::EOI);
+    };
+
+    handle_closer(tokens)?;
+    Ok(Ast::If {
+        predicate: Box::new(predicate),
+        consequent: Box::new(consequent),
+        alternative: alternative,
+    })
 }
 
 fn handle_define(tokens: &mut Tokens, input: &str) -> Result<Ast> {
@@ -283,7 +352,6 @@ fn handle_defn(tokens: &mut Tokens, input: &str) -> Result<Ast> {
     // Beginning of argument list
     next!(token, tokens, {
         if !token.openerp() {
-            println!("{}", token.as_str(input));
             return Err(ParserError::Token);
         }
     });
