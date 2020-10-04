@@ -167,12 +167,9 @@ macro_rules! next {
     };
 }
 
-macro_rules! get_symbol {
-    ( $token:ident, $input:ident ) => {
-        INTERNER.lock().unwrap().get_symbol($token.as_str($input).into())
-    };
+fn get_symbol(token: Token, input: &str) -> Symbol {
+    INTERNER.lock().unwrap().get_symbol(token.as_str(input).into())
 }
-
 
 fn parse_expr(tokens: &mut Tokens, input: &str) -> Result<Option<Ast>> {
     if let Some(token) = tokens.next() {
@@ -180,7 +177,7 @@ fn parse_expr(tokens: &mut Tokens, input: &str) -> Result<Option<Ast>> {
             t if t.commentp() => parse_expr(tokens, input),
             t if t.closerp() => Ok(None),
             t if t.openerp() => Ok(Some(parse_paren_expr(tokens, input)?)),
-            t @ Token::Symbol(_) => Ok(Some(Ast::Identifier(get_symbol!(t, input)))),
+            t @ Token::Symbol(_) => Ok(Some(Ast::Identifier(get_symbol(t, input)))),
             t @ Token::String(_) => Ok(Some(Ast::Primitive(CompilePrimitive::String(t.as_str(input).into())))),
             // TODO: need to check that this token fits an i32
             t @ Token::Integer(_) => Ok(Some(Ast::Primitive(CompilePrimitive::Integer(t.as_str(input).parse().unwrap())))),
@@ -310,7 +307,7 @@ fn handle_if(tokens: &mut Tokens, input: &str) -> Result<Ast> {
 fn handle_define(tokens: &mut Tokens, input: &str) -> Result<Ast> {
     let name = next!(t, tokens, {
         if t.is_symbol() {
-            get_symbol!(t, input)
+            get_symbol(t, input)
         } else {
             return Err(ParserError::Token);
         }
@@ -343,7 +340,7 @@ fn handle_defn(tokens: &mut Tokens, input: &str) -> Result<Ast> {
 
     let name = next!(token, tokens, {
         if token.is_symbol() {
-            get_symbol!(token, input)
+            get_symbol(token, input)
         } else {
             return Err(ParserError::Token);
         }
@@ -371,7 +368,7 @@ fn handle_defn(tokens: &mut Tokens, input: &str) -> Result<Ast> {
 
         let arg_name = next!(token, tokens, {
             if token.is_symbol() {
-                get_symbol!(token, input)
+                get_symbol(token, input)
             } else {
                 return Err(ParserError::Token);
             }
@@ -454,7 +451,7 @@ fn read_type(tokens: &mut Tokens, input: &str) -> Result<Type> {
 // Application
 fn handle_application(t: Token, tokens: &mut Tokens, input: &str) -> Result<Ast> {
     let mut application = Vec::new();
-    application.push(Ast::Identifier(get_symbol!(t, input)));
+    application.push(Ast::Identifier(get_symbol(t, input)));
     while let Some(expr) = parse_expr(tokens, input)? {
         if expr.is_identifier() || expr.is_primitive() || expr.is_application() {
             application.push(expr);
@@ -469,7 +466,7 @@ fn handle_application(t: Token, tokens: &mut Tokens, input: &str) -> Result<Ast>
 fn handle_include(tokens: &mut Tokens, input: &str) -> Result<Ast> {
     let include = next!(t, tokens, {
         if t.is_symbol() {
-            get_symbol!(t, input)
+            get_symbol(t, input)
         } else {
             return Err(ParserError::Token);
         }
