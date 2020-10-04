@@ -12,3 +12,6 @@ byteorder = "1.2.6"
 
 [dependencies.asm-syntax]
 path = "../asm-syntax"
+
+[dependencies.string-interner]
+path = "../string-interner"

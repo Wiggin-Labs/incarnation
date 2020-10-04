@@ -1,5 +1,6 @@
 extern crate asm_syntax;
 extern crate byteorder;
+extern crate string_interner;
 
 #[macro_use]
 mod macros;
@@ -16,6 +17,7 @@ mod sib;
 use emitter::Emitter;
 
 use asm_syntax::parser::{Immediate, Instruction, Operand};
+use string_interner::{INTERNER, Symbol};
 
 use std::fmt::{self, Display, Formatter};
 
@@ -55,11 +57,15 @@ impl Display for Error {
     }
 }
 
-pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, Error> {
+fn symbol_value(s: Symbol) -> String {
+    INTERNER.lock().unwrap().get_value(s).unwrap()
+}
+
+pub fn assemble(instructions: Vec<Instruction>) -> Result<Vec<u8>, Error> {
     let mut asm = Assembler::new();
 
     for instruction in instructions {
-        match instruction.opcode.as_str(input) {
+        match symbol_value(instruction.opcode).as_str() {
             "mov" => {
                 assert!(instruction.operands.len() == 2);
 
@@ -70,7 +76,7 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                     return Err(Error::ToConstant);
                 } else {
                     let register = to.unwrap_register();
-                    if let Some(r) = Register::from_str(register.as_str(input)) {
+                    if let Some(r) = Register::from_str(&symbol_value(register)) {
                         r
                     } else {
                         return Err(Error::Register);
@@ -80,7 +86,7 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                 match from {
                     // TODO
                     Operand::Register(t) | Operand::Address(_, t) => {
-                        let from_register = if let Some(r) = Register::from_str(t.as_str(input)) {
+                        let from_register = if let Some(r) = Register::from_str(&symbol_value(t)) {
                             r
                         } else {
                             return Err(Error::Register);
@@ -101,8 +107,7 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                     //Operand::Address(t) => {
                     //}
                     Operand::Constant(ty, t) => {
-                        let t = t.as_str(input);
-                        let imm = Immediate::from(t, ty)?;
+                        let imm = Immediate::from(&symbol_value(t), ty)?;
 
                         if to.is_address() {
                             asm.mov_addr_imm(to_register, None, imm);
@@ -124,9 +129,9 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                 let to = instruction.operands[0];
                 let from = instruction.operands[1];
                 if let Operand::Register(t) = to {
-                    let t = Register::from_str(t.as_str(input)).unwrap();
+                    let t = Register::from_str(&symbol_value(t)).unwrap();
                     if let Operand::Constant(_ty, c) = from {
-                        let c = c.as_str(input).parse::<u8>().unwrap();
+                        let c = symbol_value(c).parse::<u8>().unwrap();
                         asm.sub_reg_u8(t, c);
                     } else {
                         unreachable!();
@@ -139,7 +144,7 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                 assert!(instruction.operands.len() == 1);
                 let from = instruction.operands[0];
                 if let Operand::Register(t) = from {
-                    let from = Register::from_str(t.as_str(input)).unwrap();
+                    let from = Register::from_str(&symbol_value(t)).unwrap();
                     asm.push_reg(from);
                 } else {
                     unreachable!();
@@ -149,7 +154,7 @@ pub fn assemble(instructions: Vec<Instruction>, input: &str) -> Result<Vec<u8>, 
                 assert!(instruction.operands.len() == 1);
                 let to = instruction.operands[0];
                 if let Operand::Register(t) = to {
-                    let to = Register::from_str(t.as_str(input)).unwrap();
+                    let to = Register::from_str(&symbol_value(t)).unwrap();
                     asm.pop_reg(to);
                 } else {
                     unreachable!();
