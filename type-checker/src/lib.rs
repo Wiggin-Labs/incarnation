@@ -15,12 +15,12 @@ use std::collections::HashMap;
 
 pub type Result<T> = std::result::Result<T, TypeError>;
 
-pub fn type_check(ast: Vec<Ast>) -> Result<()> {
+pub fn type_check(ast: &[Ast]) -> Result<()> {
     // Add top level definitions to env right away
     // This avoids the C problem of values needing to be declared before their usage in a file.
     let mut bindings: HashMap<Symbol, Type> = HashMap::new();
     let mut holes = 0;
-    for a in &ast {
+    for a in ast {
         if let Ast::Define { name, ty, .. } = a {
             if *ty == Type::Hole {
                 holes += 1;
@@ -36,7 +36,7 @@ pub fn type_check(ast: Vec<Ast>) -> Result<()> {
     let mut iterations = 0;
     while holes > 0 && iterations < 20 {
         iterations += 1;
-        'inner: for a in &ast {
+        'inner: for a in ast {
             if let Ast::Define { name, ty, value } = a {
                 if *ty != Type::Hole {
                     continue 'inner;
@@ -78,7 +78,7 @@ pub fn type_check(ast: Vec<Ast>) -> Result<()> {
 
     let env = Environment::from_hashmap(bindings);
 
-    for a in &ast {
+    for a in ast {
         match a {
             // TODO
             Ast::Include(_) => (),
