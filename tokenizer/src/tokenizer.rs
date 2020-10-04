@@ -61,8 +61,6 @@ impl<'a> Tokenizer<'a> {
                 '}' => pt!(T::RBrace, self),
                 '[' => pt!(T::LSBracket, self),
                 ']' => pt!(T::RSBracket, self),
-                '<' => pt!(T::LABracket, self),
-                '>' => pt!(T::RABracket, self),
                 '"' => self.parse_string()?,
                 '|' => self.parse_identifier(self.position, true)?,
                 ';' => self.parse_comment()?,
@@ -91,24 +89,22 @@ impl<'a> Tokenizer<'a> {
         while let Some(c) = self.next() {
             match c {
                 '0' ..= '9' | '+' | '-' | '/' | '.' | 'e' | 'i' | 'n' | 'f' | 'N' | 'a' => (),
-                '(' | '{' | '[' | '<' => {
+                '(' | '{' | '[' => {
                     self.distinguish_ambiguous(start)?;
                     match c {
                         '(' => pt!(T::LParen, self),
                         '{' => pt!(T::LBrace, self),
                         '[' => pt!(T::LSBracket, self),
-                        '<' => pt!(T::LABracket, self),
                         _ => unreachable!(),
                     }
                     return Ok(());
                 }
-                ')' | '}' | ']' | '>' => {
+                ')' | '}' | ']' => {
                     self.distinguish_ambiguous(start)?;
                     match c {
                         ')' => pt!(T::RParen, self),
                         '}' => pt!(T::RBrace, self),
                         ']' => pt!(T::RSBracket, self),
-                        '>' => pt!(T::RABracket, self),
                         _ => unreachable!(),
                     }
                     return Ok(());
@@ -163,8 +159,6 @@ impl<'a> Tokenizer<'a> {
                         '}' => Ok(pt!(T::RBrace, self)),
                         '[' => Ok(pt!(T::LSBracket, self)),
                         ']' => Ok(pt!(T::RSBracket, self)),
-                        '<' => Ok(pt!(T::LABracket, self)),
-                        '>' => Ok(pt!(T::RABracket, self)),
                         '"' => self.parse_string(),
                         ';' => self.parse_comment(),
                         _ => panic!("Tokenizer error"),
@@ -248,8 +242,8 @@ impl<'a> Tokenizer<'a> {
 
 fn is_delimiter(c: char) -> bool {
     match c {
-        '(' | '{' | '[' | '<' => true,
-        ')' | '}' | ']' | '>' => true,
+        '(' | '{' | '[' => true,
+        ')' | '}' | ']' => true,
         c if c.is_whitespace() => true,
         '"' | ';' => true,
         _ => false,

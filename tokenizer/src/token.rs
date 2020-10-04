@@ -12,10 +12,6 @@ pub enum Token {
     LSBracket(Index),
     /// ]
     RSBracket(Index),
-    /// <
-    LABracket(Index),
-    /// >
-    RABracket(Index),
     Comment(Index),
     BlockComment(Index),
     /// # used for creating literals
@@ -36,8 +32,6 @@ impl Token {
             RBrace(i) => *i,
             LSBracket(i) => *i,
             RSBracket(i) => *i,
-            LABracket(i) => *i,
-            RABracket(i) => *i,
             Comment(i) => *i,
             BlockComment(i) => *i,
             Pound(i) => *i,
@@ -62,7 +56,6 @@ impl Token {
             (LParen(_), RParen(_)) => true,
             (LBrace(_), RBrace(_)) => true,
             (LSBracket(_), RSBracket(_)) => true,
-            (LABracket(_), RABracket(_)) => true,
             _ => false,
         }
     }
@@ -70,7 +63,7 @@ impl Token {
     pub fn openerp(&self) -> bool {
         use self::Token::*;
         match self {
-            LParen(_) | LBrace(_) | LSBracket(_) | LABracket(_) => true,
+            LParen(_) | LBrace(_) | LSBracket(_) => true,
             _ => false,
         }
     }
@@ -78,7 +71,7 @@ impl Token {
     pub fn closerp(&self) -> bool {
         use self::Token::*;
         match self {
-            RParen(_) | RBrace(_) | RSBracket(_) | RABracket(_) => true,
+            RParen(_) | RBrace(_) | RSBracket(_) => true,
             _ => false,
         }
     }
