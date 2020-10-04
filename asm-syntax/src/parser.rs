@@ -1,3 +1,4 @@
+use string_interner::{INTERNER, Symbol};
 use tokenizer::Token;
 
 use std::fmt::{self, Display, Formatter};
@@ -38,12 +39,12 @@ impl Display for Error {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Instruction {
-    pub opcode: Token,
+    pub opcode: Symbol,
     pub operands: Vec<Operand>,
 }
 
 impl Instruction {
-    pub fn new(opcode: Token, operands: Vec<Operand>) -> Self {
+    pub fn new(opcode: Symbol, operands: Vec<Operand>) -> Self {
         Instruction {
             opcode,
             operands,
@@ -77,13 +78,13 @@ impl Displacement {
 
 #[derive(Debug, Copy, Clone, PartialEq, is_enum_variant)]
 pub enum Operand {
-    Register(Token),
-    Address(Option<Displacement>, Token),
-    Constant(Constant, Token),
+    Register(Symbol),
+    Address(Option<Displacement>, Symbol),
+    Constant(Constant, Symbol),
 }
 
 impl Operand {
-    pub fn unwrap_register(self) -> Token {
+    pub fn unwrap_register(self) -> Symbol {
         match self {
             Operand::Register(t) | Operand::Address(_, t) => t,
             _ => unreachable!(),
@@ -227,14 +228,10 @@ impl<'a> Parser<'a> {
             Err(Error::EndOfInput)
         }
     }
+}
 
-    fn peek(&self) -> Option<Token> {
-        if self.position < self.tokens.len() {
-            Some(self.tokens[self.position])
-        } else {
-            None
-        }
-    }
+fn get_symbol(token: Token, input: &str) -> Symbol {
+    INTERNER.lock().unwrap().get_symbol(token.as_str(input).into())
 }
 
 pub fn parse(tokens: &[Token], input: &str, inlinep: bool) -> Result<Vec<Instruction>, Error> {
@@ -316,12 +313,12 @@ pub fn parse(tokens: &[Token], input: &str, inlinep: bool) -> Result<Vec<Instruc
                 Token::Integer(_) | Token::Float(_) => return Err(Error::NoType),
                 // We assume this is a register, but valid register names differ based on
                 // ISA, so we don't validate this until later.
-                t @ Token::Symbol(_) => operands.push(Operand::Register(t)),
+                t @ Token::Symbol(_) => operands.push(Operand::Register(get_symbol(t, input))),
                 _ => return Err(Error::Token),
             }
         }
 
-        instructions.push(Instruction::new(opcode, operands));
+        instructions.push(Instruction::new(get_symbol(opcode, input), operands));
     }
 }
 
@@ -343,7 +340,7 @@ fn parse_constant(ty: Constant, parser: &mut Parser, operands: &mut Vec<Operand>
 
     assert!(parser.next()?.closerp());
 
-    operands.push(Operand::Constant(ty, t));
+    operands.push(Operand::Constant(ty, get_symbol(t, input)));
     Ok(())
 }
 
@@ -353,7 +350,7 @@ fn parse_address(parser: &mut Parser, operands: &mut Vec<Operand>, input: &str)
     let operand = match parser.next()? {
         // This should be a displacement
         t if t.openerp() => parse_displacement(parser, input)?,
-        t @ Token::Symbol(_) => Operand::Address(None, t),
+        t @ Token::Symbol(_) => Operand::Address(None, get_symbol(t, input)),
         _ => return Err(Error::Token),
     };
     if !parser.next()?.closerp() {
@@ -448,5 +445,5 @@ fn parse_displacement(parser: &mut Parser, input: &str) -> Result<Operand, Error
         _ => return Err(Error::Token),
     };
 
-    Ok(Operand::Address(Some(displacement), reg))
+    Ok(Operand::Address(Some(displacement), get_symbol(reg, input)))
 }
