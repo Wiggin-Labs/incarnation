@@ -16,7 +16,7 @@ mod sib;
 
 use emitter::Emitter;
 
-use asm_syntax::parser::{Immediate, Instruction, Operand};
+use asm_syntax::{Immediate, Instruction, Operand};
 use string_interner::{INTERNER, Symbol};
 
 use std::fmt::{self, Display, Formatter};

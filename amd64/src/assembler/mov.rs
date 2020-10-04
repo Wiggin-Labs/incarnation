@@ -1,7 +1,7 @@
 use super::Assembler;
 use {ASO, ModRM, OSO, Register, REX, SIB};
 
-use asm_syntax::parser::{Displacement, Immediate};
+use asm_syntax::{Displacement, Immediate};
 
 impl Assembler {
     pub fn mov_reg_imm(&mut self, to: Register, imm: Immediate) {

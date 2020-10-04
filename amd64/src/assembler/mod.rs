@@ -2,7 +2,7 @@ mod mov;
 
 use {Emitter, ModRM, Register, REX, SIB};
 
-use asm_syntax::parser::Immediate;
+use asm_syntax::Immediate;
 
 use std::collections::HashMap;
 
@@ -280,7 +280,7 @@ impl Assembler {
 
 #[cfg(test)]
 mod tests {
-    use asm_syntax::parser::Immediate;
+    use asm_syntax::Immediate;
     use super::*;
 
     #[test]

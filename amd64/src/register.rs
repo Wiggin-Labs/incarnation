@@ -1,4 +1,4 @@
-use asm_syntax::parser::Immediate;
+use asm_syntax::Immediate;
 
 #[derive(Copy, Clone, Debug, PartialEq, PartialOrd, Eq, Hash)]
 #[repr(u8)]

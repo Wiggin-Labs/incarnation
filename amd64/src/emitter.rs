@@ -1,4 +1,4 @@
-use asm_syntax::parser::{Displacement, Immediate};
+use asm_syntax::{Displacement, Immediate};
 use byteorder::{LittleEndian, WriteBytesExt};
 
 pub struct Emitter(Vec<u8>);
@@ -13,7 +13,7 @@ impl Emitter {
     }
 
     pub fn emit_imm(&mut self, imm: Immediate) {
-        use asm_syntax::parser::Immediate::*;
+        use asm_syntax::Immediate::*;
         match imm {
             U8(i) => self.emit_byte(i),
             I8(i) => self.emit_byte(i as u8),
@@ -27,7 +27,7 @@ impl Emitter {
     }
 
     pub fn emit_displacement(&mut self, d: Displacement) {
-        use asm_syntax::parser::Displacement::*;
+        use asm_syntax::Displacement::*;
         match d {
             Disp8(d) => self.emit_byte(d.get() as u8),
             Disp16(d) => self.emit_u16(d.get() as u16),
