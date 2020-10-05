@@ -16,7 +16,7 @@ mod sib;
 
 use emitter::Emitter;
 
-use asm_syntax::{Immediate, Instruction, Operand};
+use asm_syntax::{Instruction, Operand};
 use string_interner::{INTERNER, Symbol};
 
 use std::fmt::{self, Display, Formatter};
@@ -33,7 +33,8 @@ pub use sib::SIB;
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Error {
     Opcode,
-    Operands,
+    Operand,
+    NumOperands,
     Register,
     ToConstant,
     InvalidConstant,
@@ -49,7 +50,8 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         f.write_str(match self {
             Error::Opcode => "Invalid opcode",
-            Error::Operands => "Incorrect number of operands",
+            Error::Operand => "Unexpected type of operand",
+            Error::NumOperands => "Incorrect number of operands",
             Error::Register => "Invalid register name",
             Error::ToConstant => "Cannot mov to a constant",
             Error::InvalidConstant => "Unable to parse constant to expected type",
@@ -65,6 +67,12 @@ pub fn assemble(instructions: Vec<Instruction>) -> Result<Vec<u8>, Error> {
     let mut asm = Assembler::new();
 
     for instruction in instructions {
+        let instruction = if let Instruction::Operation(o) = instruction {
+            o
+        } else {
+            asm.label(symbol_value(instruction.unwrap_label()));
+            continue;
+        };
         match symbol_value(instruction.opcode).as_str() {
             "mov" => {
                 assert!(instruction.operands.len() == 2);
@@ -106,20 +114,19 @@ pub fn assemble(instructions: Vec<Instruction>) -> Result<Vec<u8>, Error> {
                     }
                     //Operand::Address(t) => {
                     //}
-                    Operand::Constant(ty, t) => {
-                        let imm = Immediate::from(&symbol_value(t), ty)?;
-
+                    Operand::Constant(imm) => {
                         if to.is_address() {
                             asm.mov_addr_imm(to_register, None, imm);
                         } else {
                             asm.mov_reg_imm(to_register, imm);
                         }
                     }
+                    Operand::Label(_) => return Err(Error::Operand),
                 }
             }
             "syscall" => {
                 if instruction.operands.len() != 0 {
-                    return Err(Error::Operands);
+                    return Err(Error::NumOperands);
                 }
                 asm.syscall();
             }
@@ -130,9 +137,9 @@ pub fn assemble(instructions: Vec<Instruction>) -> Result<Vec<u8>, Error> {
                 let from = instruction.operands[1];
                 if let Operand::Register(t) = to {
                     let t = Register::from_str(&symbol_value(t)).unwrap();
-                    if let Operand::Constant(_ty, c) = from {
-                        let c = symbol_value(c).parse::<u8>().unwrap();
-                        asm.sub_reg_u8(t, c);
+                    if let Operand::Constant(imm) = from {
+                        //let c = symbol_value(c).parse::<u8>().unwrap();
+                        //asm.sub_reg_u8(t, c);
                     } else {
                         unreachable!();
                     }
