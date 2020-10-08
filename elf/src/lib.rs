@@ -2,29 +2,48 @@ extern crate byteorder;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
+use std::collections::HashMap;
+
 pub struct Elf {
     e_hdr: Elf64Ehdr,
     p_hdr: Vec<Elf64Phdr>,
     program: Vec<u8>,
-    data: Vec<u8>,
+    data: Vec<Vec<u8>>,
     shstrtab: Vec<u8>,
     s_hdr: Vec<Elf64Shdr>,
 }
 
 impl Elf {
-    pub fn new(program: Vec<u8>, data: Vec<u8>) -> Self {
+    // data is a list of constants
+    // rewrites is a map of indexes into the program to data indexes
+    pub fn new(mut program: Vec<u8>, data: Vec<Vec<u8>>, rewrites: HashMap<usize, usize>) -> Self {
         let shstrtab = b"\0.text\0.data\0.shstrtab\0";
         let data_offset = 64+56+56+program.len() as u64;
+
+        // Read memory positions of each data entry
+        let mut data_position = Vec::new();
+        let mut pos = DATA_LOCATION + data_offset;
+        let mut data_len = 0;
+        for id in &data {
+            data_position.push(pos);
+            pos += id.len() as u64;
+            data_len += id.len();
+        }
+        // Perform rewrites
+        for (p, i) in rewrites {
+            (&mut program[p..]).write_u64::<LittleEndian>(data_position[i]).unwrap();
+        }
+
         let p_hdr_size = data_offset;
-        let shstrtab_offset = data_offset + data.len() as u64;
+        let shstrtab_offset = data_offset + data_len as u64;
         let sh_off = shstrtab_offset + shstrtab.len() as u64;
         Elf {
             e_hdr: Elf64Ehdr::new(sh_off),
             p_hdr: vec![Elf64Phdr::text(0, p_hdr_size),
-                        Elf64Phdr::data(data_offset, data.len() as u64)],
+                        Elf64Phdr::data(data_offset, data_len as u64)],
             shstrtab: shstrtab.to_vec(),
             s_hdr: vec![Elf64Shdr::null(), Elf64Shdr::text(program.len() as u64),
-                        Elf64Shdr::data(data.len() as u64, data_offset),
+                        Elf64Shdr::data(data_len as u64, data_offset),
                         Elf64Shdr::shstrtab(shstrtab.len() as u64, shstrtab_offset)],
             data: data,
             program: program,
@@ -32,7 +51,7 @@ impl Elf {
     }
 
     pub fn to_vec(self) -> Vec<u8> {
-        let Elf { e_hdr, p_hdr, mut program, mut data, mut shstrtab, s_hdr } = self;
+        let Elf { e_hdr, p_hdr, mut program, data, mut shstrtab, s_hdr } = self;
 
         let mut v = Vec::new();
         v.append(&mut e_hdr.to_vec());
@@ -40,7 +59,9 @@ impl Elf {
             v.append(&mut p.to_vec());
         }
         v.append(&mut program);
-        v.append(&mut data);
+        for mut d in data {
+            v.append(&mut d);
+        }
         v.append(&mut shstrtab);
         for s in s_hdr {
             v.append(&mut s.to_vec());
@@ -56,6 +77,7 @@ type Elf64Word = u32;
 type Elf64Xword = u64;
 
 const EI_NIDENT: usize = 16; // Number of bytes in e_ident
+const DATA_LOCATION: u64 = 0x600000;
 
 struct Elf64Ehdr {
     e_ident: [u8; EI_NIDENT],
@@ -242,7 +264,7 @@ impl Elf64Shdr {
             sh_name: 0x07,
             sh_type: 1,
             sh_flags: 3,
-            sh_addr: 0x600000 + sh_offset,
+            sh_addr: DATA_LOCATION + sh_offset,
             sh_offset: sh_offset,
             sh_size: sh_size,
             sh_link: 0,
