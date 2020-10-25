@@ -2,11 +2,14 @@ mod mov;
 
 use {Emitter, ModRM, Register, REX, SIB};
 
-use asm_syntax::Immediate;
+use asm_syntax::{Displacement, Immediate};
 
 use std::collections::HashMap;
 
 pub struct Assembler {
+    constants: Vec<Vec<u8>>,
+    // <offset, constants index>
+    rewrites: HashMap<usize, usize>,
     labels: HashMap<String, usize>,
     jumps: Vec<(String, usize)>,
     emitter: Emitter,
@@ -17,6 +20,8 @@ pub struct Assembler {
 impl Assembler {
     pub fn new() -> Self {
         Assembler {
+            constants: Vec::new(),
+            rewrites: HashMap::new(),
             labels: HashMap::new(),
             jumps: Vec::new(),
             emitter: Emitter::new(),
@@ -40,15 +45,17 @@ impl Assembler {
                 panic!("Unknown label `{}`", label);
             };
 
-            let offset = (p as isize - *i as isize) as i8 as u8;
-            self.emitter.replace_byte_at_offset(*i, offset);
+            let offset = (p as isize - *i as isize - 4) as i32 as u32;
+            for (j, b) in offset.to_le_bytes().iter().enumerate() {
+                self.emitter.replace_byte_at_offset(*i+j, *b);
+            }
         }
 
         self.code()
     }
 
     pub fn label<S: Into<String>>(&mut self, label: S) {
-        self.labels.insert(label.into(), self.emitter.len() - 1);
+        self.labels.insert(label.into(), self.emitter.len());
     }
 
     pub fn push_reg(&mut self, from: Register) {
@@ -107,6 +114,45 @@ impl Assembler {
         self.emitter.emit_byte(*modrm);
     }
     */
+    pub fn test(&mut self, r1: Register, r2: Register) {
+        if r1.b64p() || r1.rexp() || r2.rexp() {
+            let mut rex = REX::new();
+            if r1.b64p() {
+                rex.set_w();
+            }
+            if r1.rexp() {
+                rex.set_r();
+            }
+            if r2.rexp() {
+                rex.set_b();
+            }
+            self.emitter.emit_byte(*rex);
+        }
+        self.emitter.emit_byte(0x85);
+        let modrm = ModRM::new()
+            .mod_direct()
+            .reg_reg(r2)
+            .rm_reg(r1);
+        self.emitter.emit_byte(*modrm);
+    }
+
+    pub fn jz<S: Into<String>>(&mut self, label: S) {
+        // TODO: we should handle short and near jumps.
+        // two byte opcode for near jump
+        self.emitter.emit_byte(0x0f);
+        self.emitter.emit_byte(0x84);
+        self.jumps.push((label.into(), self.emitter.len()));
+        self.emitter.emit_u32(0);
+    }
+
+    pub fn jnz<S: Into<String>>(&mut self, label: S) {
+        // TODO: we should handle short and near jumps.
+        // two byte opcode for near jump
+        self.emitter.emit_byte(0x0f);
+        self.emitter.emit_byte(0x85);
+        self.jumps.push((label.into(), self.emitter.len()));
+        self.emitter.emit_u32(0);
+    }
 
     pub fn ret(&mut self) {
         // ret
@@ -161,29 +207,69 @@ impl Assembler {
         self.emitter.emit_byte(0x01);
         self.emitter.emit_byte(*modrm);
     }
+    */
 
     pub fn add_reg_u8(&mut self, to: Register, imm: u8) {
-        let mut rex = REX::new().w();
-        let modrm = ModRM::new().mod_(0b11).rm_reg(to, &mut rex);
 
-        self.emitter.emit_byte(*rex);
-        // add
+        if to.b64p() {
+            let mut rex = REX::new().w();
+            if to.rexp() {
+                rex.set_b();
+            }
+            self.emitter.emit_byte(*rex);
+        }
+
+        let modrm = ModRM::new().mod_direct()
+            .rm_reg(to);
+
         self.emitter.emit_byte(0x83);
         self.emitter.emit_byte(*modrm);
         self.emitter.emit_byte(imm);
+    }
+
+    pub fn add_reg_u32(&mut self, to: Register, imm: u32) {
+
+        if to.b64p() {
+            let mut rex = REX::new().w();
+            if to.rexp() {
+                rex.set_b();
+            }
+            self.emitter.emit_byte(*rex);
+        }
+
+        let modrm = ModRM::new().mod_direct()
+            .rm_reg(to);
+
+        self.emitter.emit_byte(0x81);
+        self.emitter.emit_byte(*modrm);
+        self.emitter.emit_u32(imm);
     }
 
     pub fn add_addr_u8(&mut self, addr: Register, imm: u8) {
-        let mut rex = REX::new().w();
-        let modrm = ModRM::new().rm_addr(addr, &mut rex);
+        //let mut rex = REX::new().w();
+        let modrm = ModRM::new().rm_addr(addr);
 
-        self.emitter.emit_byte(*rex);
+        //self.emitter.emit_byte(*rex);
         // add
-        self.emitter.emit_byte(0x83);
+        self.emitter.emit_byte(0x80);
         self.emitter.emit_byte(*modrm);
         self.emitter.emit_byte(imm);
     }
-    */
+
+    pub fn add_addr_reg(&mut self, addr: Register, from: Register, displacement: Option<Displacement>) {
+        self.emitter.emit_byte(0x00);
+        let mut modrm = ModRM::new()
+            .reg_reg(from)
+            .rm_addr(addr);
+        if displacement.is_some() {
+            modrm.set_mod_indirect();
+        }
+        self.emitter.emit_byte(*modrm);
+
+        if displacement.is_some() {
+            self.emitter.emit_displacement(displacement.unwrap());
+        }
+    }
 
     pub fn sub_reg_u64(&mut self, to: Register, imm: u64) {
         let mut rex = REX::new().w();
@@ -235,20 +321,84 @@ impl Assembler {
         */
     }
 
-    /*
+    pub fn sub_reg_u32(&mut self, to: Register, imm: u32) {
+        if to.b64p() {
+            let mut rex = REX::new().w();
+            if to.rexp() {
+                rex.set_b();
+            }
+            self.emitter.emit_byte(*rex);
+        }
+
+        let modrm = ModRM::new().mod_direct()
+            // opcode extension
+            .reg(5)
+            .rm_reg(to);
+
+        self.emitter.emit_byte(0x81);
+        self.emitter.emit_byte(*modrm);
+        self.emitter.emit_u32(imm);
+    }
+
     pub fn sub_addr_u8(&mut self, addr: Register, imm: u8) {
-        let mut rex = REX::new().w();
+        //let mut rex = REX::new().w();
         let modrm = ModRM::new()
-            .rm_addr(addr, &mut rex)
+            .rm_addr(addr)
+            // opcode extension
             .reg(5);
 
-        self.emitter.emit_byte(*rex);
+        //self.emitter.emit_byte(*rex);
         // sub
-        self.emitter.emit_byte(0x83);
+        self.emitter.emit_byte(0x80);
         self.emitter.emit_byte(*modrm);
         self.emitter.emit_byte(imm);
     }
 
+    pub fn sub_addr_reg(&mut self, addr: Register, from: Register, displacement: Option<Displacement>) {
+        self.emitter.emit_byte(0x28);
+
+        let mut modrm = ModRM::new()
+            .reg_reg(from)
+            .rm_addr(addr);
+        if displacement.is_some() {
+            modrm.set_mod_indirect();
+        }
+        self.emitter.emit_byte(*modrm);
+
+        if displacement.is_some() {
+            self.emitter.emit_displacement(displacement.unwrap());
+        }
+    }
+
+    pub fn and_reg_imm(&mut self, to: Register, imm: u32) {
+        if to.b64p() {
+            let mut rex = REX::new().w();
+            if to.rexp() {
+                rex.set_b();
+            }
+            self.emitter.emit_byte(*rex);
+        }
+
+        let modrm = ModRM::new().mod_direct()
+            // opcode extension
+            .reg(4)
+            .rm_reg(to);
+
+        self.emitter.emit_byte(0x81);
+        self.emitter.emit_byte(*modrm);
+        self.emitter.emit_u32(imm);
+    }
+
+    pub fn mul(&mut self, from: Register) {
+        self.emitter.emit_byte(0xf6);
+        let modrm = ModRM::new().mod_direct()
+            // opcode extension
+            .reg(4)
+            .rm_reg(from);
+        self.emitter.emit_byte(*modrm);
+    }
+
+    /*
     pub fn shl_reg_u8(&mut self, to: Register, imm: u8) {
         let mut rex = REX::new().w();
         let modrm = ModRM::new().mod_(0b11)
@@ -280,7 +430,8 @@ impl Assembler {
 
 #[cfg(test)]
 mod tests {
-    use asm_syntax::Immediate;
+    use asm_syntax::{Displacement, Immediate};
+    use std::num::NonZeroI8;
     use super::*;
 
     #[test]
@@ -373,6 +524,11 @@ mod tests {
                         0x48, 0x83, 0xec, 8, // sub 8, rsp
                         //0xc6, 0x04, 0x24, 0x48,
                         0x48, 0xc7, 0xc0, 1, 0, 0, 0,
+                        0xc6, 0x07, 0,
+                        0x8a, 0x07,
+                        0x88, 0x47, 0xfb,
+                        0x00, 0x47, 0xfb,
+                        0x28, 0x07,
         ];
         let mut asm = Assembler::new();
         asm.mov_reg_reg(Register::R9, Register::R8);
@@ -381,6 +537,11 @@ mod tests {
         asm.sub_reg_u8(Register::RSP, 8);
         //asm.mov_addr_u8(Register::RSP, 72);
         asm.mov_reg_imm(Register::RAX, Immediate::I32(1));
+        asm.mov_addr_imm(Register::RDI, None, Immediate::U8(0));
+        asm.mov_reg_addr(Register::AL, Register::RDI, None);
+        asm.mov_addr_reg(Register::RDI, Register::AL, Some(Displacement::Disp8(NonZeroI8::new(-5).unwrap())));
+        asm.add_addr_reg(Register::RDI, Register::AL, Some(Displacement::Disp8(NonZeroI8::new(-5).unwrap())));
+        asm.sub_addr_reg(Register::RDI, Register::AL, None);
         assert_eq!(code, asm.finish());
     }
 }

@@ -82,11 +82,12 @@ impl Assembler {
             self.emitter.emit_byte(*OSO::new());
         }
 
-        if to.b64p() || to.rexp() {
+        if to.rexp() {
+        //if to.b64p() || to.rexp() {
             let mut rex = REX::new();
-            if to.b64p() {
-                rex.set_w();
-            }
+            //if to.b64p() {
+            //    rex.set_w();
+            //}
             if to.rexp() {
                 rex.set_b();
             }
@@ -103,17 +104,17 @@ impl Assembler {
         self.emitter.emit_byte(opcode);
 
         let mut modrm = ModRM::new()
-            .reg_addr(to);
+            .rm_addr(to);
         if displacement.is_some() {
             modrm.set_mod_indirect();
         }
         self.emitter.emit_byte(*modrm);
 
         // TODO
-        if modrm.sibp() {
-            let sib = SIB::new().base_reg(to);
-            self.emitter.emit_byte(*sib);
-        }
+        //if modrm.sibp() {
+        //    let sib = SIB::new().base_reg(to);
+        //    self.emitter.emit_byte(*sib);
+        //}
 
         if displacement.is_some() {
             self.emitter.emit_displacement(displacement.unwrap());
@@ -133,17 +134,21 @@ impl Assembler {
             if to.b64p() {
                 rex.set_w();
             }
-            if to.rexp() {
+            if addr.rexp() {
                 rex.set_b();
             }
-            if addr.rexp() {
+            if to.rexp() {
                 rex.set_r();
             }
             self.emitter.emit_byte(*rex);
         }
 
         // NOTE that 0x8b switches the order from 0x89 in mov_addr_reg
-        self.emitter.emit_byte(0x8b);
+        if to.b8p() {
+            self.emitter.emit_byte(0x8a);
+        } else {
+            self.emitter.emit_byte(0x8b);
+        }
 
         let mut modrm = ModRM::new()
             .reg_addr(to)
@@ -179,7 +184,11 @@ impl Assembler {
             self.emitter.emit_byte(*rex);
         }
 
-        self.emitter.emit_byte(0x89);
+        if from.b8p() {
+            self.emitter.emit_byte(0x88);
+        } else {
+            self.emitter.emit_byte(0x89);
+        }
 
         let mut modrm = ModRM::new()
             .reg_reg(from)
