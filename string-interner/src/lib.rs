@@ -8,6 +8,16 @@ use std::sync::Mutex;
 /// Global interner
 pub static INTERNER: SyncLazy<Mutex<StringInterner>> = SyncLazy::new(|| Mutex::new(StringInterner::new()));
 
+#[inline]
+pub fn get_symbol(value: String) -> Symbol {
+    INTERNER.lock().unwrap().get_symbol(value)
+}
+
+#[inline]
+pub fn get_value(s: Symbol) -> Option<String> {
+    INTERNER.lock().unwrap().get_value(s)
+}
+
 pub struct StringInterner {
     symbol_map: HashMap<String, usize>,
     symbols: Vec<String>,
