@@ -19,6 +19,7 @@ use emitter::Emitter;
 use asm_syntax::{Instruction, Operand};
 use string_interner::{INTERNER, Symbol};
 
+use std::collections::HashMap;
 use std::fmt::{self, Display, Formatter};
 
 pub use aso::ASO;
@@ -65,13 +66,21 @@ fn symbol_value(s: Symbol) -> String {
 
 pub fn assemble(instructions: Vec<Instruction>) -> Result<Vec<u8>, Error> {
     let mut asm = Assembler::new();
+    let mut constants = HashMap::new();
 
     for instruction in instructions {
-        let instruction = if let Instruction::Operation(o) = instruction {
-            o
-        } else {
-            asm.label(symbol_value(instruction.unwrap_label()));
-            continue;
+        let instruction = match instruction {
+            Instruction::Operation(o) => o,
+            Instruction::Label(s) => {
+                asm.label(symbol_value(s));
+                continue;
+            },
+            Instruction::Constant(s, i) => {
+                let bytes = i.to_le_bytes();
+                let index = asm.add_constant(bytes);
+                constants.insert(s, index);
+                continue;
+            }
         };
         match symbol_value(instruction.opcode).as_str() {
             "mov" => {

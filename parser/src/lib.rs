@@ -34,6 +34,7 @@ pub enum Ast {
     Block(Vec<Ast>),
     Primitive(CompilePrimitive),
     Asm(Vec<Token>),
+    Intrinsic(Vec<Ast>),
     Application(Vec<Ast>),
     Identifier(Symbol),
     /*
@@ -211,9 +212,18 @@ fn parse_paren_expr(tokens: &mut Tokens, input: &str) -> Result<Ast> {
             t if t.commentp() => parse_paren_expr(tokens, input),
             t @ Token::Symbol(_) => return parse_identifier(t, tokens, input),
             Token::Pound(_) => if let Some(t) = tokens.peek() {
-                if t.is_symbol() && t.as_str(input) == "asm" {
-                    tokens.next();
-                    handle_inline_asm(tokens, input)
+                if t.is_symbol() {
+                    match t.as_str(input) {
+                        "asm" => {
+                            tokens.next();
+                            handle_inline_asm(tokens, input)
+                        }
+                        "intrinsic" => {
+                            tokens.next();
+                            handle_intrinsic(tokens, input)
+                        },
+                        _ => todo!(),
+                    }
                 } else {
                     todo!()
                 }
@@ -242,6 +252,23 @@ fn handle_inline_asm(tokens: &mut Tokens, _input: &str) -> Result<Ast> {
     }
 
     return Err(ParserError::EOI);
+}
+
+// TODO
+fn handle_intrinsic(tokens: &mut Tokens, _input: &str) -> Result<Ast> {
+    let mut application = Vec::new();
+    /*
+    application.push(Ast::Identifier(get_symbol(t, input)));
+    while let Some(expr) = parse_expr(tokens, input)? {
+        if expr.is_identifier() || expr.is_primitive() || expr.is_application() {
+            application.push(expr);
+        } else {
+            return Err(ParserError::Value);
+        }
+    }
+    */
+
+    Ok(Ast::Intrinsic(application))
 }
 
 fn parse_identifier(t: Token, tokens: &mut Tokens, input: &str) -> Result<Ast> {

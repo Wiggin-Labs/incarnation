@@ -15,6 +15,7 @@ use std::num::{NonZeroI8, NonZeroI16, NonZeroI32};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Instruction {
     Label(Symbol),
+    Constant(Symbol, Immediate),
     Operation(Operation),
 }
 
@@ -64,7 +65,7 @@ impl Displacement {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, is_enum_variant)]
+#[derive(Debug, Clone, PartialEq, is_enum_variant)]
 pub enum Operand {
     Register(Symbol),
     Address(Option<Displacement>, Symbol),
@@ -100,7 +101,7 @@ pub enum Constant {
     I64,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Immediate {
     U8(u8),
     U16(u16),
@@ -110,6 +111,7 @@ pub enum Immediate {
     I16(i16),
     I32(i32),
     I64(i64),
+    Bytes(Vec<u8>),
 }
 
 impl Immediate {
@@ -124,6 +126,20 @@ impl Immediate {
             Constant::I32 => Immediate::I32(t.parse::<i32>()?),
             Constant::I64 => Immediate::I64(t.parse::<i64>()?),
         })
+    }
+
+    pub fn to_le_bytes(self) -> Vec<u8> {
+        match self {
+            Immediate::Bytes(v) => v,
+            Immediate::U8(i) => i.to_le_bytes().to_vec(),
+            Immediate::U16(i) => i.to_le_bytes().to_vec(),
+            Immediate::U32(i) => i.to_le_bytes().to_vec(),
+            Immediate::U64(i) => i.to_le_bytes().to_vec(),
+            Immediate::I8(i) => i.to_le_bytes().to_vec(),
+            Immediate::I16(i) => i.to_le_bytes().to_vec(),
+            Immediate::I32(i) => i.to_le_bytes().to_vec(),
+            Immediate::I64(i) => i.to_le_bytes().to_vec(),
+        }
     }
 
     pub fn b64p(&self) -> bool {

@@ -54,6 +54,12 @@ impl Assembler {
         self.code()
     }
 
+    pub fn add_constant(&mut self, constant: Vec<u8>) -> usize {
+        let index = self.constants.len();
+        self.constants.push(constant);
+        index
+    }
+
     pub fn label<S: Into<String>>(&mut self, label: S) {
         self.labels.insert(label.into(), self.emitter.len());
     }

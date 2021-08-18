@@ -12,6 +12,9 @@ path = "asm-syntax"
 [dependencies.parser]
 path = "parser"
 
+[dependencies.string-interner]
+path = "string-interner"
+
 [dependencies.tokenizer]
 path = "tokenizer"
 
