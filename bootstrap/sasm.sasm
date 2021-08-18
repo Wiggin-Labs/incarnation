@@ -235,7 +235,7 @@ tokenize
             (sb x19 x30)
             (sd (+ x19 8) x31)
             (sub x31 x10 x31)
-            (sd (+ x19 4) x31)
+            (sw (+ x19 4) x31)
             (addi x19 x19 16)
             (jal x0 tokenize-loop)
 
