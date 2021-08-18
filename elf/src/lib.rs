@@ -1,6 +1,7 @@
+/// See https://cirosantilli.com/elf-hello-world
 extern crate byteorder;
 
-use byteorder::{LittleEndian, WriteBytesExt};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use std::collections::HashMap;
 
@@ -16,7 +17,7 @@ pub struct Elf {
 impl Elf {
     // data is a list of constants
     // rewrites is a map of indexes into the program to data indexes
-    pub fn new(mut program: Vec<u8>, data: Vec<Vec<u8>>, rewrites: HashMap<usize, usize>) -> Self {
+    pub fn new(isa: ISA, mut program: Vec<u8>, data: Vec<Vec<u8>>, rewrites: HashMap<usize, usize>) -> Self {
         let shstrtab = b"\0.text\0.data\0.shstrtab\0";
         let data_offset = 64+56+56+program.len() as u64;
 
@@ -30,15 +31,27 @@ impl Elf {
             data_len += id.len();
         }
         // Perform rewrites
-        for (p, i) in rewrites {
-            (&mut program[p..]).write_u64::<LittleEndian>(data_position[i]).unwrap();
+        match isa {
+            ISA::Amd64 => for (p, i) in rewrites {
+                (&mut program[p..]).write_u64::<LittleEndian>(data_position[i]).unwrap();
+            },
+            ISA::Riscv => for (p, i) in rewrites {
+                // TODO
+                let offset = data_position[i] as u32;
+                let lui = (&program[p..]).read_u32::<LittleEndian>().unwrap();
+                let addi = (&program[p+4..]).read_u32::<LittleEndian>().unwrap();
+                let lui = (offset & 0xff_ff_f0_00) | lui;
+                let addi = (offset & 0xf_ff) << 20 | addi;
+                (&mut program[p..]).write_u32::<LittleEndian>(lui).unwrap();
+                (&mut program[p+4..]).write_u32::<LittleEndian>(addi).unwrap();
+            }
         }
 
         let p_hdr_size = data_offset;
         let shstrtab_offset = data_offset + data_len as u64;
         let sh_off = shstrtab_offset + shstrtab.len() as u64;
         Elf {
-            e_hdr: Elf64Ehdr::new(sh_off),
+            e_hdr: Elf64Ehdr::new(isa, sh_off),
             p_hdr: vec![Elf64Phdr::text(0, p_hdr_size),
                         Elf64Phdr::data(data_offset, data_len as u64)],
             shstrtab: shstrtab.to_vec(),
@@ -79,6 +92,11 @@ type Elf64Xword = u64;
 const EI_NIDENT: usize = 16; // Number of bytes in e_ident
 const DATA_LOCATION: u64 = 0x600000;
 
+pub enum ISA {
+    Amd64 = 0x3e,
+    Riscv = 0xf3,
+}
+
 struct Elf64Ehdr {
     e_ident: [u8; EI_NIDENT],
     e_type: Elf64Half,
@@ -97,7 +115,7 @@ struct Elf64Ehdr {
 }
 
 impl Elf64Ehdr {
-    fn new(sh_off: u64) -> Self {
+    fn new(isa: ISA, sh_off: u64) -> Self {
         Elf64Ehdr {
             e_ident: [0x7f, b'E', b'L', b'F', // magic number
                       2, // 1 for 32 bit, 2 for 64bit
@@ -108,7 +126,7 @@ impl Elf64Ehdr {
             // object file type: 2 if executable
             e_type: 2,
             // target isa: 0x3e is amd64
-            e_machine: 0x3e,
+            e_machine: isa as u16,
             // set to 1 for the original version of elf
             e_version: 1,
             // memory address of the entry point. right after elf header + program header

@@ -6,6 +6,10 @@ use std::str::Chars;
 
 type TokenizeResult = Result<(), TokenizeError>;
 
+// TODO: consider implementing this as an iterator
+// This ought to be more efficient, especially if we use a buffered reader as well, but I'm not
+// sure how we can handle errors if we take this approach. We might have the Item be
+// Result<Token, TokenizeError>.
 pub struct Tokenizer<'a> {
     position: usize,
     raw_input: &'a str,
@@ -15,7 +19,7 @@ pub struct Tokenizer<'a> {
 
 macro_rules! pt {
     ($ty:expr, $s:ident) => {
-        $s.tokens.push($ty(Index::new($s.position, $s.position)));
+        $s.tokens.push($ty(Index::new($s.position, $s.position)))
     };
 }
 
@@ -66,6 +70,7 @@ impl<'a> Tokenizer<'a> {
                 ';' => self.parse_comment()?,
                 '#' => match self.peek() {
                     Some('|') => self.parse_block_comment()?,
+                    Some('\'') => self.parse_char()?,
                     _ => pt!(T::Pound, self),
                 },
                 c if c.is_whitespace() => {}
@@ -192,6 +197,30 @@ impl<'a> Tokenizer<'a> {
             }
         }
         Err(TokenizeError::EOF)
+    }
+
+    pub fn parse_char(&mut self) -> TokenizeResult {
+        let start = self.position;
+        self.next();
+        match self.next() {
+            Some('\\') => match self.next() {
+                Some('"') | Some('\\') | Some('\'') | Some('r') | Some('n') | Some('t') | Some('0') => (),
+                Some(_) => return Err(TokenizeError::Char),
+                None => return Err(TokenizeError::EOF),
+            },
+            Some('\'') => return Err(TokenizeError::Char),
+            Some(_) => (),
+            None => return Err(TokenizeError::EOF),
+        }
+
+        match self.next() {
+            Some('\'') => {
+                self.tokens.push(T::Char(Index::new(start, self.position)));
+                Ok(())
+            }
+            Some(_) => Err(TokenizeError::Char),
+            None => Err(TokenizeError::EOF),
+        }
     }
 
     fn parse_block_comment(&mut self) -> TokenizeResult {

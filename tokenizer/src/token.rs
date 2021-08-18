@@ -16,6 +16,7 @@ pub enum Token {
     BlockComment(Index),
     /// # used for creating literals
     Pound(Index),
+    Char(Index),
     String(Index),
     Integer(Index),
     Float(Index),
@@ -35,6 +36,7 @@ impl Token {
             Comment(i) => *i,
             BlockComment(i) => *i,
             Pound(i) => *i,
+            Char(i) => *i,
             String(i) => *i,
             Integer(i) => *i,
             Float(i) => *i,
