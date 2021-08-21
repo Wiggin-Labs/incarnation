@@ -205,7 +205,7 @@ impl<'a> Asm<'a> {
                 let s = &s[2..(s.len() - 1)].as_bytes();
                 let i = match s[0] {
                     b'\\' => match s[1] {
-                        b'"' | b'\\' | b'\'' => s[1] as i32,
+                        b'\\' | b'\'' => s[1] as i32,
                         b'r' => b'\r' as i32,
                         b'n' => b'\n' as i32,
                         b't' => b'\t' as i32,
@@ -218,6 +218,25 @@ impl<'a> Asm<'a> {
             }
             s @ Token::String(_) => {
                 let s = s.as_str(input).as_bytes();
+                let mut v = Vec::with_capacity(s.len());
+                let mut i = 0;
+                while i < s.len() {
+                    match s[i] {
+                        b'\\' => {
+                            v.push(match s[i+1] {
+                                b'"' | b'\\' => s[i+1],
+                                b'r' => b'\r',
+                                b'n' => b'\n',
+                                b't' => b'\t',
+                                b'0' => b'\0',
+                                _ => unreachable!(),
+                            });
+                            i += 1;
+                        }
+                        _ => v.push(s[i]),
+                    }
+                    i += 1;
+                }
                 self.globals.insert(var, self.data.len());
                 self.data.push(s[1..s.len()-1].to_vec());
             }
