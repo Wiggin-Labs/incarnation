@@ -89,16 +89,18 @@ start
 ;(addi x17 x0 214)
 ;(ecall)
 ;(add x11 x13 x0)
+;(add x18 x0 x12)
 ;test-tokenizer-loop
-;    (beq x12 x19 test-tokenizer-loop-write)
-;    (lb x10 x12)
-;    (addi x10 x10 97)
-;    (sb x13 x10)
-;    (addi x12 x12 16)
-;    (addi x13 x13 1)
+;    (beq x18 x19 test-tokenizer-loop-write)
+;    (ld x11 (+ 8 x18))
+;    (lw x12 (+ 4 x18))
+;    (addi x10 x0 1)
+;    (addi x17 x0 64)
+;    (ecall)
+;    (addi x18 x18 16)
 ;    (jal x0 test-tokenizer-loop)
 ;test-tokenizer-loop-write
-    ;; write(fd, msg, len)
+;   ;; write(fd, msg, len)
 ;    (addi x10 x0 1)
 ;    ;(add x11 x0 x12)
 ;    ;(sub x12 x19 x11)
@@ -109,12 +111,14 @@ start
 ;    (add x10 x0 x0)
 ;    (addi x17 x0 93)
 ;    (ecall)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
     (ld x10 (- x2 8))
-    ;(add x11 x0 x19 x10)
-    ;;(sr x11 x11 x28)
+    (add x11 x0 x19)
     (jal x1 assemble)
+    (jal x1 elf)
+    (sd (- 8 x2) x10)
+    (sd (- 16 x2) x11)
 
     ; Get output file name
     (ld x11 (+ x2 16))
@@ -140,7 +144,9 @@ start
     ;; Save fd
     (add x28 x10 x0)
     ;; write(fd, msg, len)
-    ;; TODO msg, len
+    (ld x11 (- 8 x2))
+    (ld x12 (- 16 x2))
+    (sub x12 x12 x11)
     (addi x17 x0 64)
     (ecall)
 
@@ -446,6 +452,57 @@ tokenize
         (beq x28 x0 tokenize-loop)
         (jal x0 tokenize-comment)
 
+(define Instr::define "define")
+(define Instr::add "add")
+(define Instr::sub "sub")
+(define Instr::xor "xor")
+(define Instr::or "or")
+(define Instr::and "and")
+(define Instr::sll "sll")
+(define Instr::srl "srl")
+(define Instr::sra "sra")
+(define Instr::slt "slt")
+(define Instr::sltu "sltu")
+
+(define Instr::addi "addi")
+(define Instr::subi "subi")
+(define Instr::xori "xori")
+(define Instr::ori "ori")
+(define Instr::andi "andi")
+(define Instr::slli "slli")
+(define Instr::srli "srli")
+(define Instr::srai "srai")
+(define Instr::slti "slti")
+(define Instr::sltiu "sltiu")
+
+(define Instr::lb "lb")
+(define Instr::lh "lh")
+(define Instr::lw "lw")
+(define Instr::ld "ld")
+(define Instr::lbu "lbu")
+(define Instr::lhu "lhu")
+(define Instr::lwu "lwu")
+(define Instr::la "la")
+
+(define Instr::sb "sb")
+(define Instr::sh "sh")
+(define Instr::sw "sw")
+(define Instr::sd "sd")
+
+(define Instr::beq "beq")
+(define Instr::bne "bne")
+(define Instr::blt "blt")
+(define Instr::bge "bge")
+(define Instr::bltu "bltu")
+(define Instr::bgeu "bgeu")
+
+(define Instr::jal "jal")
+(define Instr::jalr "jalr")
+(define Instr::lui "lui")
+(define Instr::auipc "auipc")
+(define Instr::ecall "ecall")
+(define Instr::ebreak "ebreak")
+
 ;; Args:
 ;;  x10 - input: String
 ;;  x11 - len: tokens.len
@@ -454,14 +511,496 @@ tokenize
 ;;  x14 - capacity: output.capacity
 ;; Locals:
 assemble
-assemble-loop
-    (sub x28 x12 x11)
-    (beq x28 x0 assemble-after-loop)
+    assemble-loop
+        (beq x12 x11 assemble-after-loop)
 
-    (lb x28 x12)
-    (lh x29 (+ 2 x12))
-    (lw x30 (+ 4 x12))
-    (addi x12 x12 8)
+        (lb x28 x12)
+        (addi x12 x12 16)
 
-    (addi x31 x0 1)
-assemble-after-loop
+        (subi x29 x28 Token::Symbol)
+        (beq x29 x0 assemble-add-label)
+        (subi x29 x28 Token::LeftParen)
+        (bne x29 x0 assemble-error)
+
+        (lb x28 x12)
+        (subi x29 x28 Token::Symbol)
+        (bne x29 x0 assemble-error)
+        (ld x28 (+ x12 8))
+        (lw x29 (+ x12 4))
+        (addi x12 x12 16)
+        (la x30 Instr::define)
+        (addi x31 x0 6)
+        (jal x2 assemble-str-eq)
+        (beq x30 x0 assemble-handle-opcode)
+    assemble-handle-define
+        ;; TODO
+    assemble-add-label
+        ;; TODO
+    assemble-handle-opcode
+        (la x30 Instr::add)
+        (addi x31 x0 3)
+        (jal x2 assemble-str-eq)
+        ;; TODO
+        (bne x30 x0 assemble-r)
+    assemble-r
+    assemble-unwrap-register
+        (lb x6 x12)
+        (subi x6 x6 Token::Symbol)
+        (bne x6 x0 assemble-error)
+        (ld x6 (+ x12 8))
+        (lw x7 (+ x12 4))
+        (addi x12 x12 16)
+    assemble-str-eq
+        (bne x29 x30 assemble-str-eq-false)
+        assemble-str-eq-loop
+            (beq x29 x0 assemble-str-eq-true)
+            (subi x29 x29 1)
+            (lb x6 x28)
+            (addi x28 x28 1)
+            (lb x7 x30)
+            (addi x30 x30 1)
+            (beq x6 x7 assemble-str-eq-loop)
+        assemble-str-eq-false
+            (add x30 x0 x0)
+            (jalr x0 x2)
+        assemble-str-eq-true
+            (addi x30 x0 1)
+            (jalr x0 x2)
+    assemble-after-loop
+        (jalr x0 x1)
+    assemble-error
+        (addi x10 x0 30)
+        (addi x17 x0 93)
+        (ecall)
+
+;; Based on simple design outlined near the beginning of https://moss.cs.iit.edu/cs351/slides/slides-malloc.pdf
+;; x10 - size in bytes
+(define Malloc::Alignment 7)
+(define Malloc::SIZE_T_SIZE 8)
+malloc
+    ;; Align(size)
+    (addi x6 x0 Malloc::Alignment)
+    (add x10 x10 x6)
+    (xori x6 x6 -1)
+    (and x10 x10 x6)
+
+    ;; header
+    (ori x6 x10 1)
+    ;; sbrk(blk_size)
+    ;; brk(0) => CURRENT_END
+    (add x7 x0 x10)
+    (add x10 x0 x0)
+    (addi x17 x0 214)
+    (ecall)
+    ;; brk(CURRENT_END+blk_size)
+    (add x10 x10 x7)
+    (addi x17 x0 214)
+    (ecall)
+
+    (sb x10 x6)
+    ;; SIZE_T_SIZE = 8
+    (addi x10 x10 Malloc::SIZE_T_SIZE)
+    (jalr x0 x1)
+
+;; x10 - pointer to free
+free
+    ;; SIZE_T_SIZE = 8
+    (subi x10 x10 Malloc::SIZE_T_SIZE)
+    (lb x6 x10)
+    (addi x7 x0 1)
+    (xori x7 x7 -1)
+    (and x6 x6 x7)
+    (sd x10 x6)
+    (jalr x0 x1)
+
+;; x10 - old pointer
+;; x11 - new size in bytes
+realloc
+    (subi x2 x2 16)
+    (sd (+ x2 8) x10)
+    (sd x2 x1)
+    (add x10 x11 x0)
+    (jal x1 malloc)
+    (ld x1 x2)
+    (ld x11 (+ x2 8))
+    (addi x2 x2 16)
+    (add x6 x0 x10)
+
+    ;; Load the header/length of the old block
+    (ld x7 (- x11 8))
+    (subi x7 x6 1)
+    realloc-copy-loop
+        ;; Note we load a u64 at a time to save on iterations.
+        (ld x8 x11)
+        (sd x6 x8)
+        (addi x6 x6 8)
+        (addi x11 x11 8)
+        (subi x7 x7 1)
+        (bne x7 x0 realloc-copy-loop)
+    realloc-after-loop
+        (jalr x0 x1)
+
+;; x10 - &program
+;; x11 - program.len
+;; x12 - &data (len, &data)
+;; x13 - data.len
+;; x14 - &rewrites (program_index, data_index)
+;; x15 - rewrites.len
+;; Locals
+;;   x20 - elf output buffer
+;;   x21 - data_offset
+;;   x22 - data_len
+;;   x23 - shstrtab_offset
+;;   x24 - &data_position (offset)
+;;   x25 - elf output buffer beginning
+elf
+    (define Elf::shstrtab "\0.text\0.data\0.shstrtab\0")
+    (define Elf::shstrtab-len 23)
+    ;; 0x600000
+    (define Elf::DATA_LOCATION 6291456)
+    ;; 64 + 56 + 56
+    (define Elf::data_offset 176)
+
+    ;; Allocate 64k for exe output
+    (sd (- 8 x2) x10)
+    ;; brk(0)
+    (add x10 x0 x0)
+    (addi x17 x0 214)
+    (ecall)
+    (add x20 x0 x10)
+    (add x25 x0 x10)
+    ;; 64k
+    (addi x22 x0 1)
+    (slli x22 x22 16)
+    ;; brk(CURRENT_END+6k)
+    (add x10 x10 x22)
+    (addi x17 x0 214)
+    (ecall)
+    (ld x10 (- 8 x2))
+
+    (sub x21 x11 x10)
+    (addi x21 x21 Elf::data_offset)
+
+    (add x28 x0 x13)
+    (sub x31 x2 x28)
+    (sub x24 x2 x28)
+    (add x29 x0 x12)
+    (add x22 x0 x0)
+    (beq x28 x0 elf-get-data-len-loop-after)
+    ;; 0x600000
+    (addi x6 x0 6)
+    (slli x6 x6 20)
+    (add x6 x21 x6)
+    elf-get-data-len-loop
+        (ld x30 x29)
+        (add x22 x22 x30)
+        (addi x29 x29 16)
+        (subi x13 x0 1)
+        (sd x31 x6)
+        (add x6 x6 x30)
+        (addi x31 x31 8)
+        (bne x28 x0 elf-get-data-len-loop)
+    elf-get-data-len-loop-after
+    (add x23 x21 x30)
+
+    elf-rewrites
+        (beq x15 x0 elf-write-ehdr)
+        (ld x28 x14)
+        (add x28 x28 x10)
+        (ld x29 (+ x14 8))
+        (add x6 x0 x24)
+        elf-rewrites-mult
+            (beq x29 x0 elf-rewrites-mult-after)
+            (addi x6 x6 8)
+            (subi x29 x29 1)
+            (jal x0 elf-rewrites-mult)
+        elf-rewrites-mult-after
+        ;; offset
+        (ld x6 x6)
+        ;; lui
+        (lw x30 x28)
+        ;; 0xff_ff_f0_00
+        ;(addi x7 x0 65535)
+        ;(slli x7 x7 16)
+        ;(addi x7 x7 61440)
+        ;(and x7 x6 x7)
+        (srai x7 x6 12)
+        (slli x7 x7 12)
+        (or x30 x30 x7)
+        (sw x28 x30)
+        ;; addi
+        (lw x30 (+ x28 4))
+        ;; 0xf_ff
+        (addi x7 x0 15)
+        (slli x7 x7 8)
+        (addi x7 x7 255)
+        (and x7 x6 x7)
+        (slli x7 x7 20)
+        (or x30 x30 x7)
+        (sw (+ x28 4) x30)
+        (addi x14 x14 16)
+        (subi x15 x15 1)
+        (jal x0 elf-rewrites)
+
+    elf-write-ehdr
+        ;; 0x7f
+        (addi x31 x0 127)
+        (sb x20 x31)
+        (addi x31 x0 #'E')
+        (sb (+ 1 x20) x31)
+        (addi x31 x0 #'L')
+        (sb (+ 2 x20) x31)
+        (addi x31 x0 #'F')
+        (sb (+ 3 x20) x31)
+        (addi x31 x0 2)
+        (sb (+ 4 x20) x31) ;; 1 for 32 bit, 2 for 64 bit
+        (addi x31 x0 1)
+        (sb (+ 5 x20) x31) ;; endianness - 1 is little-endian
+        (sb (+ 6 x20) x31) ;; version
+        (sb (+ 7 x20) x0) ;; abi version
+        (sd (+ 8 x20) x0)
+        (addi x20 x20 16)
+
+        ;; e_type
+        (addi x31 x0 2)
+        (sh x20 x31)
+        ;; e_machine
+        ;; RISCV = 0xf3
+        (addi x31 x0 243)
+        (sh (+ 2 x20) x31)
+        ;; e_version
+        (addi x31 x0 1)
+        (sw (+ 4 x20) x31)
+        ;; e_entry
+        ;; 0x4000b0
+        (addi x31 x0 4)
+        (slli x31 x31 20)
+        (addi x31 x31 176)
+        (sd (+ 8 x20) x31)
+        ;; e_phoff
+        (addi x31 x0 64)
+        (sd (+ 16 x20) x31)
+        ;; e_shoff
+        (addi x31 x23 Elf::shstrtab-len)
+        (sd (+ 24 x20) x31)
+        ;; e_flags
+        (sw (+ 32 x20) x0)
+        ;; e_ehsize
+        (addi x31 x0 64)
+        (sh (+ 36 x20) x31)
+        ;; e_phentsize
+        (addi x31 x0 56)
+        (sh (+ 38 x20) x31)
+        ;; e_phnum
+        (addi x31 x0 2)
+        (sh (+ 40 x20) x31)
+        ;; e_shentsize
+        (addi x31 x0 64)
+        (sh (+ 42 x20) x31)
+        ;; e_shnum
+        (addi x31 x0 4)
+        (sh (+ 44 x20) x31)
+        ;; e_shstrndx
+        (addi x31 x0 3)
+        (sh (+ 46 x20) x31)
+        (addi x20 x20 48)
+
+    elf-write-phdrs
+        elf-write-phdrs-text
+            ;; p_type
+            (addi x31 x0 1)
+            (sw x20 x31)
+            ;; p_flags
+            (addi x31 x0 5)
+            (sw (+ 4 x20) x31)
+            ;; p_offset
+            (sd (+ 8 x20) x0)
+            ;; p_vaddr
+            ;; 0x400000
+            (addi x31 x0 4)
+            (slli x31 x31 20)
+            (sd (+ 16 x20) x31)
+            ;; p_paddr
+            ;; 0x400000
+            (sd (+ 24 x20) x31)
+            ;; p_filesz
+            (sd (+ 32 x20) x21)
+            ;; p_memsz
+            (sd (+ 40 x20) x21)
+            ;; p_align
+            ;; 0x200000
+            (addi x31 x0 2)
+            (slli x31 x31 20)
+            (sd (+ 48 x20) x31)
+            (addi x20 x20 56)
+        elf-write-phdrs-data
+            ;; p_type
+            (addi x31 x0 1)
+            (sw x20 x31)
+            ;; p_flags
+            (addi x31 x0 6)
+            (sw (+ 4 x20) x31)
+            ;; p_offset
+            (sd (+ 8 x20) x21)
+            ;; p_vaddr
+            ;; 0x600000
+            (addi x31 x0 6)
+            (slli x31 x31 20)
+            (add x31 x21 x31)
+            (sd (+ 16 x20) x31)
+            ;; p_paddr
+            ;; 0x600000
+            (sd (+ 24 x20) x31)
+            ;; p_filesz
+            (sd (+ 32 x20) x22)
+            ;; p_memsz
+            (sd (+ 40 x20) x22)
+            ;; p_align
+            ;; 0x200000
+            (addi x31 x0 2)
+            (slli x31 x31 20)
+            (sd (+ 48 x20) x31)
+            (addi x20 x20 56)
+    elf-write-shstrtab
+        (la x6 Elf::shstrtab)
+        (addi x7 x6 Elf::shstrtab-len)
+    elf-write-shstrtab-loop
+        (lb x8 x6)
+        (sb x20 x8)
+        (addi x6 x6 1)
+        (addi x20 x20 1)
+        (bne x6 x7 elf-write-shstrtab-loop)
+    elf-write-s_hdrs
+        elf-write-s_hdrs-null
+            ;; sh_name
+            (sw x20 x0)
+            ;; sh_type
+            (sw (+ 4 x20) x0)
+            ;; sh_flags
+            (sd (+ 8 x20) x0)
+            ;; sh_addr
+            (sd (+ 16 x20) x0)
+            ;; sh_offset
+            (sd (+ 24 x20) x0)
+            ;; sh_size
+            (sd (+ 32 x20) x0)
+            ;; sh_link
+            (sd (+ 40 x20) x0)
+            ;; sh_info
+            (sd (+ 44 x20) x0)
+            ;; sh_addralign
+            (sd (+ 48 x20) x0)
+            ;; sh_entsize
+            (sd (+ 56 x20) x0)
+            (addi x20 x20 64)
+        elf-write-s_hdrs-text
+            ;; sh_name
+            (addi x31 x0 1)
+            (sw x20 x31)
+            ;; sh_type
+            (sw (+ 4 x20) x31)
+            ;; sh_flags
+            (addi x31 x0 6)
+            (sd (+ 8 x20) x31)
+            ;; sh_addr
+            ;; 0x4000b0
+            (addi x31 x0 1024)
+            (slli x31 x31 12)
+            (addi x31 x31 176)
+            (sd (+ 16 x20) x31)
+            ;; sh_offset
+            ;; 0xb0
+            (addi x31 x0 176)
+            (sd (+ 24 x20) x31)
+            ;; sh_size
+            (sd (+ 32 x20) x11)
+            ;; sh_link
+            (sd (+ 40 x20) x0)
+            ;; sh_info
+            (sd (+ 44 x20) x0)
+            ;; sh_addralign
+            (addi x31 x0 16)
+            (sd (+ 48 x20) x31)
+            ;; sh_entsize
+            (sd (+ 56 x20) x0)
+            (addi x20 x20 64)
+        elf-write-s_hdrs-data
+            ;; sh_name
+            (addi x31 x0 7)
+            (sw x20 x31)
+            ;; sh_type
+            (addi x31 x0 1)
+            (sw (+ 4 x20) x31)
+            ;; sh_flags
+            (addi x31 x0 3)
+            (sd (+ 8 x20) x31)
+            ;; sh_addr
+            ;; 0x600000
+            (addi x31 x0 6)
+            (slli x31 x31 20)
+            (add x31 x21 x31)
+            (sd (+ 16 x20) x31)
+            ;; sh_offset
+            (sd (+ 24 x20) x21)
+            ;; sh_size
+            (sd (+ 32 x20) x22)
+            ;; sh_link
+            (sd (+ 40 x20) x0)
+            ;; sh_info
+            (sd (+ 44 x20) x0)
+            ;; sh_addralign
+            (addi x31 x0 4)
+            (sd (+ 48 x20) x31)
+            ;; sh_entsize
+            (sd (+ 56 x20) x0)
+            (addi x20 x20 64)
+        elf-write-s_hdrs-shstrtab
+            ;; sh_name
+            (addi x31 x0 13)
+            (sw x20 x31)
+            ;; sh_type
+            (addi x31 x0 3)
+            (sw (+ 4 x20) x31)
+            ;; sh_flags
+            (sd (+ 8 x20) x0)
+            ;; sh_addr
+            (sd (+ 16 x20) x0)
+            ;; sh_offset
+            (sd (+ 24 x20) x23)
+            ;; sh_size
+            (addi x31 x0 Elf::shstrtab-len)
+            (sd (+ 32 x20) x31)
+            ;; sh_link
+            (sd (+ 40 x20) x0)
+            ;; sh_info
+            (sd (+ 44 x20) x0)
+            ;; sh_addralign
+            (addi x31 x0 1)
+            (sd (+ 48 x20) x31)
+            ;; sh_entsize
+            (sd (+ 56 x20) x0)
+            (addi x20 x20 64)
+    elf-write-data
+        (beq x13 x0 elf-write-program)
+        (ld x28 x12)
+        (ld x29 (+ 8 x12))
+        elf-write-data-inner
+            (lb x30 x29)
+            (sb x20 x30)
+            (addi x20 x20 1)
+            (addi x29 x29 1)
+            (subi x28 x28 1)
+            (bne x28 x0 elf-write-data-inner)
+        (addi x12 x12 16)
+        (subi x13 x13 1)
+        (jal x0 elf-write-data)
+    elf-write-program
+        (lw x6 x10)
+        (sw x20 x6)
+        (addi x10 x10 4)
+        (addi x20 x20 4)
+        (bne x10 x11 elf-write-program)
+    elf-after
+        (add x11 x0 x25)
+        (add x11 x0 x20)
+        (jalr x0 x1)
