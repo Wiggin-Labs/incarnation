@@ -217,7 +217,8 @@ impl<'a> Asm<'a> {
                 self.constants.insert(var, i);
             }
             s @ Token::String(_) => {
-                let s = s.as_str(input).as_bytes();
+                let s = s.as_str(input);
+                let s = s[1..s.len()-1].as_bytes();
                 let mut v = Vec::with_capacity(s.len());
                 let mut i = 0;
                 while i < s.len() {
@@ -238,7 +239,7 @@ impl<'a> Asm<'a> {
                     i += 1;
                 }
                 self.globals.insert(var, self.data.len());
-                self.data.push(s[1..s.len()-1].to_vec());
+                self.data.push(v);
             }
             _ => unreachable!(),
         }
