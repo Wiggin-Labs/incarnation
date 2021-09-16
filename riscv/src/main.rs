@@ -241,6 +241,22 @@ impl<'a> Asm<'a> {
                 self.globals.insert(var, self.data.len());
                 self.data.push(v);
             }
+            Token::Pound(_) => {
+                assert!(tokens.next().unwrap().openerp());
+                let mut v = Vec::new();
+                loop {
+                    match tokens.next().unwrap() {
+                        s @ Token::Integer(_) => {
+                            let i = s.as_str(input).parse().unwrap();
+                            v.push(i);
+                        }
+                        t if t.closerp() => break,
+                        _ => unreachable!(),
+                    }
+                }
+                self.globals.insert(var, self.data.len());
+                self.data.push(v);
+            }
             _ => unreachable!(),
         }
 
