@@ -4,6 +4,7 @@
 (define Token::Integer 3)
 (define Token::Char 4)
 (define Token::String 5)
+(define Token::Pound 6)
 
 start
     ;; Check that argc == 2
@@ -291,10 +292,12 @@ tokenize
 
     tokenize-literal
         (beq x10 x11 tokenize-literal-error)
-        (lb x28 x10)
-        (addi x10 x10 1)
+        (lb x28 (+ x10 1))
+        (addi x30 x0 Token::Pound)
+        (jal x0 tokenize-loop-push-token)
         (subi x28 x28 #'\'')
-        (bne x28 x0 tokenize-literal-error)
+        (bne x28 x0 tokenize-loop-push-token)
+        (addi x10 x10 1)
 
         (beq x10 x11 tokenize-literal-error)
         (lb x28 x10)
