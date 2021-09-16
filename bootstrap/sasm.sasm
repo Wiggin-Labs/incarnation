@@ -660,7 +660,7 @@ assemble
             assemble-handle-define-string-loop
                 (lb x8 x30)
                 (subi x9 x8 #'\\')
-                (bne x9 x0 assemble-handle-define-string-loop-no-esacpe)
+                (bne x9 x0 assemble-handle-define-string-loop-no-escape)
                 (addi x30 x30 1)
                 (lb x8 x30)
                 (subi x9 x8 #'\\')
@@ -680,7 +680,7 @@ assemble
                 (addi x8 x0 #'\0')
                 (bne x9 x0 assemble-error)
 
-                assemble-handle-define-string-loop-no-esacpe
+                assemble-handle-define-string-loop-no-escape
                 (sb x7 x8)
                 (addi x7 x7 1)
                 (addi x30 x30 1)
@@ -766,15 +766,15 @@ assemble
         ;; rd
         (jal x1 assemble-unwrap-register)
         (slli x6 x6 7)
-        (orr _ _ x6)
+        (or _ _ x6)
         ;; rs1
         (jal x1 assemble-unwrap-register)
         (slli x6 x6 15)
-        (orr _ _ x6)
+        (or _ _ x6)
         ;; rs2
         (jal x1 assemble-unwrap-register)
         (slli x6 x6 20)
-        (orr _ _ x6)
+        (or _ _ x6)
     assemble-unwrap-register
         (lb x6 x10)
         (subi x6 x6 Token::Symbol)
@@ -1048,7 +1048,7 @@ assemble
             (sd (- x2 16) x10)
             (sd (- x2 24) x11)
             ;; TODO - return value is in x6
-            (jal x0 x1)
+            (jalr x0 x1)
     assemble-after-loop
         (ld x1 x2)
         (addi x2 x2 8)
@@ -1064,15 +1064,15 @@ assemble
 ;;   x12 - str2
 ;;   x13 - str2.len
 str-eq
-    (bne x11 x13 assemble-str-eq-false)
+    (bne x11 x13 str-eq-false)
     str-eq-loop
-        (beq x11 x0 assemble-str-eq-true)
+        (beq x11 x0 str-eq-true)
         (subi x11 x11 1)
         (lb x6 x10)
         (addi x10 x10 1)
         (lb x7 x12)
         (addi x12 x12 1)
-        (beq x6 x7 assemble-str-eq-loop)
+        (beq x6 x7 str-eq-loop)
     str-eq-false
         (add x10 x0 x0)
         (jalr x0 x1)
@@ -1166,8 +1166,6 @@ realloc
 ;;   x24 - &data_position (offset)
 ;;   x25 - elf output buffer beginning
 elf
-    (define Elf::shstrtab "\0.text\0.data\0.shstrtab\0")
-    (define Elf::shstrtab-len 23)
     ;; 0x600000
     (define Elf::DATA_LOCATION 6291456)
     ;; 64 + 56 + 56
@@ -1255,243 +1253,78 @@ elf
         (jal x0 elf-rewrites)
 
     elf-write-ehdr
-        ;; 0x7f
-        (addi x31 x0 127)
-        (sb x20 x31)
-        (addi x31 x0 #'E')
-        (sb (+ 1 x20) x31)
-        (addi x31 x0 #'L')
-        (sb (+ 2 x20) x31)
-        (addi x31 x0 #'F')
-        (sb (+ 3 x20) x31)
-        (addi x31 x0 2)
-        (sb (+ 4 x20) x31) ;; 1 for 32 bit, 2 for 64 bit
-        (addi x31 x0 1)
-        (sb (+ 5 x20) x31) ;; endianness - 1 is little-endian
-        (sb (+ 6 x20) x31) ;; version
-        (sb (+ 7 x20) x0) ;; abi version
-        (sd (+ 8 x20) x0)
-        (addi x20 x20 16)
-
-        ;; e_type
-        (addi x31 x0 2)
-        (sh x20 x31)
-        ;; e_machine
-        ;; RISCV = 0xf3
-        (addi x31 x0 243)
-        (sh (+ 2 x20) x31)
-        ;; e_version
-        (addi x31 x0 1)
-        (sw (+ 4 x20) x31)
-        ;; e_entry
-        ;; 0x4000b0
-        (addi x31 x0 4)
-        (slli x31 x31 20)
-        (addi x31 x31 176)
-        (sd (+ 8 x20) x31)
-        ;; e_phoff
-        (addi x31 x0 64)
-        (sd (+ 16 x20) x31)
-        ;; e_shoff
-        (addi x31 x23 Elf::shstrtab-len)
-        (sd (+ 24 x20) x31)
-        ;; e_flags
-        (sw (+ 32 x20) x0)
-        ;; e_ehsize
-        (addi x31 x0 64)
-        (sh (+ 36 x20) x31)
-        ;; e_phentsize
-        (addi x31 x0 56)
-        (sh (+ 38 x20) x31)
-        ;; e_phnum
-        (addi x31 x0 2)
-        (sh (+ 40 x20) x31)
-        ;; e_shentsize
-        (addi x31 x0 64)
-        (sh (+ 42 x20) x31)
-        ;; e_shnum
-        (addi x31 x0 4)
-        (sh (+ 44 x20) x31)
-        ;; e_shstrndx
-        (addi x31 x0 3)
-        (sh (+ 46 x20) x31)
-        (addi x20 x20 48)
+    (define elf-ehdr #(127 69 76 70 2 1 1 0 0 0 0 0 0 0 0 0 
+                       2 0 ;; e_type
+                       243 0 ;; e_machine
+                       1 0 0 0 ;; e_version
+                       176 0 64 0 0 0 0 0 ;; e_entry
+                       64 0 0 0 0 0 0 0 ;; e_phoff
+                       0 0 0 0 0 0 0 0 ;; e_shoff
+                       0 0 0 0 ;; e_flags
+                       64 0 ;; e_ehsize
+                       56 0 ;; e_phentsize
+                       2 0 ;; e_num
+                       64 0 ;; e_shentsize
+                       0 0 ;; e_num
+                       0 0)) ;; e_shstrndx
+        (addi x6 x0 8)
+        (la x7 elf-ehdr)
+        elf-write-ehdr-loop
+            (ld x8 x7)
+            (sd x20 x7)
+            (addi x20 x20 8)
+            (addi x7 x7 8)
+            (subi x6 x6 1)
+            (bne x6 x0 elf-write-ehdr-loop)
 
     elf-write-phdrs
-        elf-write-phdrs-text
-            ;; p_type
-            (addi x31 x0 1)
-            (sw x20 x31)
-            ;; p_flags
-            (addi x31 x0 5)
-            (sw (+ 4 x20) x31)
-            ;; p_offset
-            (sd (+ 8 x20) x0)
-            ;; p_vaddr
-            ;; 0x400000
-            (addi x31 x0 4)
-            (slli x31 x31 20)
-            (sd (+ 16 x20) x31)
-            ;; p_paddr
-            ;; 0x400000
-            (sd (+ 24 x20) x31)
-            ;; p_filesz
-            (sd (+ 32 x20) x21)
-            ;; p_memsz
-            (sd (+ 40 x20) x21)
-            ;; p_align
-            ;; 0x200000
-            (addi x31 x0 2)
-            (slli x31 x31 20)
-            (sd (+ 48 x20) x31)
-            (addi x20 x20 56)
-        elf-write-phdrs-data
-            ;; p_type
-            (addi x31 x0 1)
-            (sw x20 x31)
-            ;; p_flags
-            (addi x31 x0 6)
-            (sw (+ 4 x20) x31)
-            ;; p_offset
-            (sd (+ 8 x20) x21)
-            ;; p_vaddr
-            ;; 0x600000
-            (addi x31 x0 6)
-            (slli x31 x31 20)
-            (add x31 x21 x31)
-            (sd (+ 16 x20) x31)
-            ;; p_paddr
-            ;; 0x600000
-            (sd (+ 24 x20) x31)
-            ;; p_filesz
-            (sd (+ 32 x20) x22)
-            ;; p_memsz
-            (sd (+ 40 x20) x22)
-            ;; p_align
-            ;; 0x200000
-            (addi x31 x0 2)
-            (slli x31 x31 20)
-            (sd (+ 48 x20) x31)
-            (addi x20 x20 56)
-    elf-write-shstrtab
-        (la x6 Elf::shstrtab)
-        (addi x7 x6 Elf::shstrtab-len)
-    elf-write-shstrtab-loop
-        (lb x8 x6)
-        (sb x20 x8)
-        (addi x6 x6 1)
-        (addi x20 x20 1)
-        (bne x6 x7 elf-write-shstrtab-loop)
-    elf-write-s_hdrs
-        elf-write-s_hdrs-null
-            ;; sh_name
-            (sw x20 x0)
-            ;; sh_type
-            (sw (+ 4 x20) x0)
-            ;; sh_flags
-            (sd (+ 8 x20) x0)
-            ;; sh_addr
-            (sd (+ 16 x20) x0)
-            ;; sh_offset
-            (sd (+ 24 x20) x0)
-            ;; sh_size
-            (sd (+ 32 x20) x0)
-            ;; sh_link
-            (sd (+ 40 x20) x0)
-            ;; sh_info
-            (sd (+ 44 x20) x0)
-            ;; sh_addralign
-            (sd (+ 48 x20) x0)
-            ;; sh_entsize
-            (sd (+ 56 x20) x0)
-            (addi x20 x20 64)
-        elf-write-s_hdrs-text
-            ;; sh_name
-            (addi x31 x0 1)
-            (sw x20 x31)
-            ;; sh_type
-            (sw (+ 4 x20) x31)
-            ;; sh_flags
-            (addi x31 x0 6)
-            (sd (+ 8 x20) x31)
-            ;; sh_addr
-            ;; 0x4000b0
-            (addi x31 x0 1024)
-            (slli x31 x31 12)
-            (addi x31 x31 176)
-            (sd (+ 16 x20) x31)
-            ;; sh_offset
-            ;; 0xb0
-            (addi x31 x0 176)
-            (sd (+ 24 x20) x31)
-            ;; sh_size
-            (sd (+ 32 x20) x11)
-            ;; sh_link
-            (sd (+ 40 x20) x0)
-            ;; sh_info
-            (sd (+ 44 x20) x0)
-            ;; sh_addralign
-            (addi x31 x0 16)
-            (sd (+ 48 x20) x31)
-            ;; sh_entsize
-            (sd (+ 56 x20) x0)
-            (addi x20 x20 64)
-        elf-write-s_hdrs-data
-            ;; sh_name
-            (addi x31 x0 7)
-            (sw x20 x31)
-            ;; sh_type
-            (addi x31 x0 1)
-            (sw (+ 4 x20) x31)
-            ;; sh_flags
-            (addi x31 x0 3)
-            (sd (+ 8 x20) x31)
-            ;; sh_addr
-            ;; 0x600000
-            (addi x31 x0 6)
-            (slli x31 x31 20)
-            (add x31 x21 x31)
-            (sd (+ 16 x20) x31)
-            ;; sh_offset
-            (sd (+ 24 x20) x21)
-            ;; sh_size
-            (sd (+ 32 x20) x22)
-            ;; sh_link
-            (sd (+ 40 x20) x0)
-            ;; sh_info
-            (sd (+ 44 x20) x0)
-            ;; sh_addralign
-            (addi x31 x0 4)
-            (sd (+ 48 x20) x31)
-            ;; sh_entsize
-            (sd (+ 56 x20) x0)
-            (addi x20 x20 64)
-        elf-write-s_hdrs-shstrtab
-            ;; sh_name
-            (addi x31 x0 13)
-            (sw x20 x31)
-            ;; sh_type
-            (addi x31 x0 3)
-            (sw (+ 4 x20) x31)
-            ;; sh_flags
-            (sd (+ 8 x20) x0)
-            ;; sh_addr
-            (sd (+ 16 x20) x0)
-            ;; sh_offset
-            (sd (+ 24 x20) x23)
-            ;; sh_size
-            (addi x31 x0 Elf::shstrtab-len)
-            (sd (+ 32 x20) x31)
-            ;; sh_link
-            (sd (+ 40 x20) x0)
-            ;; sh_info
-            (sd (+ 44 x20) x0)
-            ;; sh_addralign
-            (addi x31 x0 1)
-            (sd (+ 48 x20) x31)
-            ;; sh_entsize
-            (sd (+ 56 x20) x0)
-            (addi x20 x20 64)
+        (define elf-phdr-text #(1 0 0 0
+                                5 0 0 0
+                                0 0 0 0 0 0 0 0
+                                0 0 64 0 0 0 0 0
+                                0 0 64 0 0 0 0 0
+                                0 0 0 0 0 0 0 0
+                                0 0 0 0 0 0 0 0
+                                0 16 0 0 0 0 0 0))
+
+        (define elf-phdr-data #(1 0 0 0
+                                6 0 0 0
+                                0 0 0 0 0 0 0 0
+                                0 0 96 0 0 0 0 0
+                                0 0 96 0 0 0 0 0
+                                0 0 0 0 0 0 0 0
+                                0 0 0 0 0 0 0 0
+                                0 16 0 0 0 0 0 0))
+        (addi x6 x0 7)
+        (la x7 elf-phdr-text)
+        elf-write-phdrs-text-loop
+            (ld x8 x7)
+            (sd x20 x7)
+            (addi x20 x20 8)
+            (addi x7 x7 8)
+            (subi x6 x6 1)
+            (bne x6 x0 elf-write-phdrs-text-loop)
+            (sd (- x20 24) x21)
+            (sd (- x20 16) x21)
+
+        (addi x6 x0 7)
+        (la x7 elf-phdr-data)
+        elf-write-phdrs-data-loop
+            (ld x8 x7)
+            (sd x20 x7)
+            (addi x20 x20 8)
+            (addi x7 x7 8)
+            (subi x6 x6 1)
+            (bne x6 x0 elf-write-phdrs-data-loop)
+            (sd (- x20 24) x22)
+            (sd (- x20 16) x22)
+
+    elf-write-program
+        (lw x6 x10)
+        (sw x20 x6)
+        (addi x10 x10 4)
+        (addi x20 x20 4)
+        (bne x10 x11 elf-write-program)
     elf-write-data
         (beq x13 x0 elf-write-program)
         (ld x28 x12)
@@ -1506,13 +1339,7 @@ elf
         (addi x12 x12 16)
         (subi x13 x13 1)
         (jal x0 elf-write-data)
-    elf-write-program
-        (lw x6 x10)
-        (sw x20 x6)
-        (addi x10 x10 4)
-        (addi x20 x20 4)
-        (bne x10 x11 elf-write-program)
     elf-after
-        (add x11 x0 x25)
+        (add x10 x0 x25)
         (add x11 x0 x20)
         (jalr x0 x1)

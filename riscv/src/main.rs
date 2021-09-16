@@ -251,6 +251,7 @@ impl<'a> Asm<'a> {
                             v.push(i);
                         }
                         t if t.closerp() => break,
+                        t if t.commentp() => continue,
                         _ => unreachable!(),
                     }
                 }
