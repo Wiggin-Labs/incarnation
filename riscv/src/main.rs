@@ -49,24 +49,17 @@ struct Asm<'a> {
     rewrites: HashMap<usize, usize>,
     constants: HashMap<&'a str, i32>,
     globals: HashMap<&'a str, usize>,
-}
-
-fn unwrap_register<'a, I: Iterator<Item = &'a Token>>(tokens: &mut I, input: &str) -> Register {
-    if let Some(Token::Symbol(i)) = tokens.next() {
-        Register::from_str(Token::Symbol(*i).as_str(input)).unwrap()
-    } else {
-        unreachable!();
-    }
+    register_aliases: HashMap<&'a str, Register>,
 }
 
 macro_rules! r {
-    ($op:ident, $asm:expr, $tokens:ident, $input:ident) => {
+    ($op:ident, $self:ident, $tokens:ident, $input:ident) => {
         {
-            let rd = unwrap_register($tokens, $input);
-            let rs1 = unwrap_register($tokens, $input);
-            let rs2 = unwrap_register($tokens, $input);
+            let rd = $self.unwrap_register($tokens, $input);
+            let rs1 = $self.unwrap_register($tokens, $input);
+            let rs2 = $self.unwrap_register($tokens, $input);
             assert!($tokens.next().unwrap().closerp());
-            $asm.$op(rd, rs1, rs2);
+            $self.asm.$op(rd, rs1, rs2);
         }
     };
 }
@@ -74,8 +67,8 @@ macro_rules! r {
 macro_rules! i {
     ($op:ident, $self:ident, $tokens:ident, $input:ident) => {
         {
-            let rd = unwrap_register($tokens, $input);
-            let rs1 = unwrap_register($tokens, $input);
+            let rd = $self.unwrap_register($tokens, $input);
+            let rs1 = $self.unwrap_register($tokens, $input);
             let imm = $self.read_imm($tokens, $input);
             assert!($tokens.next().unwrap().closerp());
             $self.asm.$op(rd, rs1, imm);
@@ -83,76 +76,40 @@ macro_rules! i {
     };
 }
 
-fn offset<'a, I: Iterator<Item = &'a Token>>(tokens: &mut I, input: &str) -> (Register, i32) {
-    match tokens.next().unwrap() {
-        s @ Token::Symbol(_) => (Register::from_str(s.as_str(input)).unwrap(), 0),
-        Token::LParen(_) => {
-            let negate = match tokens.next().unwrap() {
-                s @ Token::Symbol(_) => match s.as_str(input) {
-                    "+" => false,
-                    "-" => true,
-                    _ => unreachable!(),
-                }
-                _ => unreachable!(),
-            };
-
-            let (r, i): (_, i32) = match tokens.next().unwrap() {
-                s @ Token::Symbol(_) => match tokens.next().unwrap() {
-                    i @ Token::Integer(_) => (Register::from_str(s.as_str(input)).unwrap(), i.as_str(input).parse().unwrap()),
-                    _ => unreachable!(),
-                },
-                i @ Token::Integer(_) => match tokens.next().unwrap() {
-                    s @ Token::Symbol(_) => (Register::from_str(s.as_str(input)).unwrap(), i.as_str(input).parse().unwrap()),
-                    _ => unreachable!(),
-                },
-                _ => unreachable!(),
-            };
-            assert!(tokens.next().unwrap().closerp());
-            // TODO
-            if negate {
-                (r, -i)
-            } else {
-                (r, i)
-            }
-        },
-        _ => unreachable!(),
-    }
-}
-
 macro_rules! i2 {
-    ($op:ident, $asm:expr, $tokens:ident, $input:ident) => {
+    ($op:ident, $self:ident, $tokens:ident, $input:ident) => {
         {
-            let rd = unwrap_register($tokens, $input);
-            let (rs1, imm) = offset($tokens, $input);
+            let rd = $self.unwrap_register($tokens, $input);
+            let (rs1, imm) = $self.offset($tokens, $input);
             assert!($tokens.next().unwrap().closerp());
-            $asm.$op(rd, rs1, imm);
+            $self.asm.$op(rd, rs1, imm);
         }
     };
 }
 
 macro_rules! s {
-    ($op:ident, $asm:expr, $tokens:ident, $input:ident) => {
+    ($op:ident, $self:ident, $tokens:ident, $input:ident) => {
         {
-            let (rs1, imm) = offset($tokens, $input);
-            let rd = unwrap_register($tokens, $input);
+            let (rs1, imm) = $self.offset($tokens, $input);
+            let rd = $self.unwrap_register($tokens, $input);
             assert!($tokens.next().unwrap().closerp());
-            $asm.$op(rd, rs1, imm);
+            $self.asm.$op(rd, rs1, imm);
         }
     };
 }
 
 macro_rules! b {
-    ($op:ident, $asm:expr, $tokens:ident, $input:ident) => {
+    ($op:ident, $self:ident, $tokens:ident, $input:ident) => {
         {
-            let rs1 = unwrap_register($tokens, $input);
-            let rs2 = unwrap_register($tokens, $input);
+            let rs1 = $self.unwrap_register($tokens, $input);
+            let rs2 = $self.unwrap_register($tokens, $input);
             let label = if let Some(Token::Symbol(i)) = $tokens.next() {
                 Token::Symbol(*i).as_str($input)
             } else {
                 unreachable!();
             };
             assert!($tokens.next().unwrap().closerp());
-            $asm.$op(rs1, rs2, label);
+            $self.asm.$op(rs1, rs2, label);
         }
     };
 }
@@ -165,6 +122,7 @@ impl<'a> Asm<'a> {
             rewrites: HashMap::new(),
             constants: HashMap::new(),
             globals: HashMap::new(),
+            register_aliases: HashMap::new(),
         };
 
         let mut tokens = tokens.iter().filter(|t| !t.commentp());
@@ -196,6 +154,10 @@ impl<'a> Asm<'a> {
         };
 
         match tokens.next().unwrap() {
+            s @ Token::Symbol(_) => {
+                let r = Register::from_str(s.as_str(input)).unwrap();
+                self.register_aliases.insert(var, r);
+            }
             s @ Token::Integer(_) => {
                 let i = s.as_str(input).parse().unwrap();
                 self.constants.insert(var, i);
@@ -264,7 +226,78 @@ impl<'a> Asm<'a> {
         assert!(tokens.next().unwrap().closerp());
     }
 
-    fn read_imm<'b, I: Iterator<Item = &'b Token>>(&mut self, tokens: &mut I, input: &str) -> i32 {
+    fn unwrap_register<'b, I: Iterator<Item = &'b Token>>(&self, tokens: &mut I, input: &str) -> Register {
+        if let Some(Token::Symbol(i)) = tokens.next() {
+            let reg = Token::Symbol(*i).as_str(input);
+            if let Some(r) = Register::from_str(reg) {
+                r
+            } else {
+                *self.register_aliases.get(reg).unwrap()
+            }
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn offset<'b, I: Iterator<Item = &'b Token>>(&self, tokens: &mut I, input: &str) -> (Register, i32) {
+        match tokens.next().unwrap() {
+            s @ Token::Symbol(_) => {
+                let s = s.as_str(input);
+                if let Some(r) = Register::from_str(s) {
+                    (r, 0)
+                } else {
+                    (*self.register_aliases.get(s).unwrap(), 0)
+                }
+            }
+            Token::LParen(_) => {
+                let negate = match tokens.next().unwrap() {
+                    s @ Token::Symbol(_) => match s.as_str(input) {
+                        "+" => false,
+                        "-" => true,
+                        _ => unreachable!(),
+                    }
+                    _ => unreachable!(),
+                };
+
+                let (r, i): (_, i32) = match tokens.next().unwrap() {
+                    s @ Token::Symbol(_) => match tokens.next().unwrap() {
+                        i @ Token::Integer(_) => {
+                            let s = s.as_str(input);
+                            if let Some(r) = Register::from_str(s) {
+                                (r, i.as_str(input).parse().unwrap())
+                            } else {
+                                (*self.register_aliases.get(s).unwrap(), i.as_str(input).parse().unwrap())
+                            }
+                        },
+                        _ => unreachable!(),
+                    },
+                    i @ Token::Integer(_) => match tokens.next().unwrap() {
+                        s @ Token::Symbol(_) => {
+                            let s = s.as_str(input);
+                            if let Some(r) = Register::from_str(s) {
+                                (r, i.as_str(input).parse().unwrap())
+                            } else {
+                                (*self.register_aliases.get(s).unwrap(), i.as_str(input).parse().unwrap())
+                            }
+                        },
+                        _ => unreachable!(),
+                    },
+                    _ => unreachable!(),
+                };
+                assert!(tokens.next().unwrap().closerp());
+                // TODO
+                if negate {
+                    (r, -i)
+                } else {
+                    (r, i)
+                }
+            },
+            _ => unreachable!(),
+        }
+    }
+
+
+    fn read_imm<'b, I: Iterator<Item = &'b Token>>(&self, tokens: &mut I, input: &str) -> i32 {
         match tokens.next().unwrap() {
             s @ Token::Integer(_) => s.as_str(input).parse::<i32>().unwrap(),
             s @ Token::Char(_) => {
@@ -292,16 +325,16 @@ impl<'a> Asm<'a> {
 
     fn handle_opcode<'b, I: Iterator<Item = &'b Token>>(&mut self, opcode: &str, tokens: &mut I, input: &str) {
         match opcode {
-            "add" => r!(add, self.asm, tokens, input),
-            "sub" => r!(sub, self.asm, tokens, input),
-            "xor" => r!(xor, self.asm, tokens, input),
-            "or" => r!(or, self.asm, tokens, input),
-            "and" => r!(and, self.asm, tokens, input),
-            "sll" => r!(sll, self.asm, tokens, input),
-            "srl" => r!(srl, self.asm, tokens, input),
-            "sra" => r!(sra, self.asm, tokens, input),
-            "slt" => r!(slt, self.asm, tokens, input),
-            "sltu" => r!(sltu, self.asm, tokens, input),
+            "add" => r!(add, self, tokens, input),
+            "sub" => r!(sub, self, tokens, input),
+            "xor" => r!(xor, self, tokens, input),
+            "or" => r!(or, self, tokens, input),
+            "and" => r!(and, self, tokens, input),
+            "sll" => r!(sll, self, tokens, input),
+            "srl" => r!(srl, self, tokens, input),
+            "sra" => r!(sra, self, tokens, input),
+            "slt" => r!(slt, self, tokens, input),
+            "sltu" => r!(sltu, self, tokens, input),
 
             "addi" => i!(addi, self, tokens, input),
             "subi" => i!(subi, self, tokens, input),
@@ -314,15 +347,15 @@ impl<'a> Asm<'a> {
             "slti" => i!(slti, self, tokens, input),
             "sltiu" => i!(sltiu, self, tokens, input),
 
-            "lb" => i2!(lb, self.asm, tokens, input),
-            "lh" => i2!(lh, self.asm, tokens, input),
-            "lw" => i2!(lw, self.asm, tokens, input),
-            "ld" => i2!(ld, self.asm, tokens, input),
-            "lbu" => i2!(lbu, self.asm, tokens, input),
-            "lhu" => i2!(lhu, self.asm, tokens, input),
-            "lwu" => i2!(lwu, self.asm, tokens, input),
+            "lb" => i2!(lb, self, tokens, input),
+            "lh" => i2!(lh, self, tokens, input),
+            "lw" => i2!(lw, self, tokens, input),
+            "ld" => i2!(ld, self, tokens, input),
+            "lbu" => i2!(lbu, self, tokens, input),
+            "lhu" => i2!(lhu, self, tokens, input),
+            "lwu" => i2!(lwu, self, tokens, input),
             "la" => {
-                let rd = unwrap_register(tokens, input);
+                let rd = self.unwrap_register(tokens, input);
                 // TODO: offsets?
                 let symbol = if let Some(Token::Symbol(i)) = tokens.next() {
                     Token::Symbol(*i).as_str(input)
@@ -336,20 +369,20 @@ impl<'a> Asm<'a> {
                 self.asm.addi(rd, rd, 0);
             }
 
-            "sb" => s!(sb, self.asm, tokens, input),
-            "sh" => s!(sh, self.asm, tokens, input),
-            "sw" => s!(sw, self.asm, tokens, input),
-            "sd" => s!(sd, self.asm, tokens, input),
+            "sb" => s!(sb, self, tokens, input),
+            "sh" => s!(sh, self, tokens, input),
+            "sw" => s!(sw, self, tokens, input),
+            "sd" => s!(sd, self, tokens, input),
 
-            "beq" => b!(beq, self.asm, tokens, input),
-            "bne" => b!(bne, self.asm, tokens, input),
-            "blt" => b!(blt, self.asm, tokens, input),
-            "bge" => b!(bge, self.asm, tokens, input),
-            "bltu" => b!(bltu, self.asm, tokens, input),
-            "bgeu" => b!(bgeu, self.asm, tokens, input),
+            "beq" => b!(beq, self, tokens, input),
+            "bne" => b!(bne, self, tokens, input),
+            "blt" => b!(blt, self, tokens, input),
+            "bge" => b!(bge, self, tokens, input),
+            "bltu" => b!(bltu, self, tokens, input),
+            "bgeu" => b!(bgeu, self, tokens, input),
 
             "jal" => {
-                let rd = unwrap_register(tokens, input);
+                let rd = self.unwrap_register(tokens, input);
                 let label = if let Some(Token::Symbol(i)) = tokens.next() {
                     Token::Symbol(*i).as_str(input)
                 } else {
@@ -359,20 +392,20 @@ impl<'a> Asm<'a> {
                 self.asm.jal(rd, label);
             }
             "jalr" => {
-                let rd = unwrap_register(tokens, input);
-                let (rs, imm) = offset(tokens, input);
+                let rd = self.unwrap_register(tokens, input);
+                let (rs, imm) = self.offset(tokens, input);
                 assert!(tokens.next().unwrap().closerp());
                 // TODO
                 self.asm.jalr(rd, rs, imm);
             }
             "lui" => {
-                let rd = unwrap_register(tokens, input);
+                let rd = self.unwrap_register(tokens, input);
                 let imm = self.read_imm(tokens, input);
                 assert!(tokens.next().unwrap().closerp());
                 self.asm.lui(rd, imm as u32);
             }
             "auipc" => {
-                let rd = unwrap_register(tokens, input);
+                let rd = self.unwrap_register(tokens, input);
                 let imm = self.read_imm(tokens, input);
                 assert!(tokens.next().unwrap().closerp());
                 self.asm.auipc(rd, imm as u32);
