@@ -260,28 +260,27 @@ impl<'a> Asm<'a> {
                 };
 
                 let (r, i): (_, i32) = match tokens.next().unwrap() {
-                    s @ Token::Symbol(_) => match tokens.next().unwrap() {
-                        i @ Token::Integer(_) => {
-                            let s = s.as_str(input);
-                            if let Some(r) = Register::from_str(s) {
-                                (r, i.as_str(input).parse().unwrap())
-                            } else {
-                                (*self.register_aliases.get(s).unwrap(), i.as_str(input).parse().unwrap())
+                    s @ Token::Symbol(_) => {
+                        let s = s.as_str(input);
+                        let (r, i) = if let Some(r) = Register::from_str(s) {
+                            (Some(r), None)
+                        } else if let Some(r) = self.register_aliases.get(s) {
+                            (Some(*r), None)
+                        } else {
+                            (None, Some(*self.constants.get(s).unwrap()))
+                        };
+
+                        if let Some(r) = r {
+                            match tokens.next().unwrap() {
+                                i @ Token::Integer(_) => (r, i.as_str(input).parse().unwrap()),
+                                i @ Token::Symbol(_) => (r, *self.constants.get(i.as_str(input)).unwrap()),
+                                _ => unreachable!(),
                             }
-                        },
-                        _ => unreachable!(),
-                    },
-                    i @ Token::Integer(_) => match tokens.next().unwrap() {
-                        s @ Token::Symbol(_) => {
-                            let s = s.as_str(input);
-                            if let Some(r) = Register::from_str(s) {
-                                (r, i.as_str(input).parse().unwrap())
-                            } else {
-                                (*self.register_aliases.get(s).unwrap(), i.as_str(input).parse().unwrap())
-                            }
-                        },
-                        _ => unreachable!(),
-                    },
+                        } else {
+                            (self.unwrap_register(tokens, input), i.unwrap())
+                        }
+                    }
+                    i @ Token::Integer(_) => (self.unwrap_register(tokens, input), i.as_str(input).parse().unwrap()),
                     _ => unreachable!(),
                 };
                 assert!(tokens.next().unwrap().closerp());
