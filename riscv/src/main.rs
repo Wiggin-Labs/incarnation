@@ -314,6 +314,40 @@ impl Asm {
 
     fn read_imm<'b, I: Iterator<Item = &'b Token>>(&self, tokens: &mut I, input: &str) -> i32 {
         match tokens.next().unwrap() {
+            t if t.openerp() => {
+                let s = tokens.next().unwrap();
+                assert!(s.is_symbol());
+                let s = s.as_str(input);
+                assert_eq!(s, "len");
+                let i = match tokens.next().unwrap() {
+                    s @ Token::Symbol(_) => {
+                        let s = s.as_str(input);
+                        *self.globals.get(s).unwrap()
+                    },
+                    s @ Token::String(_) => {
+                        let s = s.as_str(input).as_bytes();
+                        let mut j = 0;
+                        let mut i = 1;
+                        while i < s.len()-1 {
+                            match s[i] {
+                                b'\\' => match s[i+1] {
+                                    b'"' | b'\\' | b'r' | b'n' | b't' | b'0' => {
+                                        j += 1;
+                                        i += 1;
+                                    }
+                                    _ => unreachable!(),
+                                },
+                                _ => j += 1,
+                            }
+                            i += 1;
+                        }
+                        j
+                    },
+                    _ => unreachable!(),
+                };
+                assert!(tokens.next().unwrap().closerp());
+                i as i32
+            }
             s @ Token::Integer(_) => s.as_str(input).parse::<i32>().unwrap(),
             s @ Token::Char(_) => {
                 let s = s.as_str(input);
