@@ -26,7 +26,7 @@ fn main() {
     let input_file = env::args().nth(1).unwrap();
     let input = fs::read_to_string(&input_file).unwrap();
     let tokens = tokenizer::Tokenizer::tokenize(&input).unwrap();
-    let (program, data, rewrites) = Asm::assemble(tokens, &input);
+    let (program, data, rewrites) = Asm::new(tokens, &input);
     let e = elf::Elf::new(elf::ISA::Riscv, program, data, rewrites);
     let mut output_file = input_file.split(".").next().unwrap();
     if output_file == input_file {
@@ -43,13 +43,13 @@ fn main() {
 
 }
 
-struct Asm<'a> {
+struct Asm {
     asm: Assembler,
     data: Vec<Vec<u8>>,
     rewrites: HashMap<usize, usize>,
-    constants: HashMap<&'a str, i32>,
-    globals: HashMap<&'a str, usize>,
-    register_aliases: HashMap<&'a str, Register>,
+    constants: HashMap<String, i32>,
+    globals: HashMap<String, usize>,
+    register_aliases: HashMap<String, Register>,
 }
 
 macro_rules! r {
@@ -114,8 +114,8 @@ macro_rules! b {
     };
 }
 
-impl<'a> Asm<'a> {
-    fn assemble(tokens: Vec<Token>, input: &'a str) -> (Vec<u8>, Vec<Vec<u8>>, HashMap<usize, usize>) {
+impl Asm {
+    fn new(tokens: Vec<Token>, input: &str) -> (Vec<u8>, Vec<Vec<u8>>, HashMap<usize, usize>) {
         let mut asm = Asm {
             asm: Assembler::new(),
             data: Vec::new(),
@@ -125,16 +125,23 @@ impl<'a> Asm<'a> {
             register_aliases: HashMap::new(),
         };
 
+        asm.assemble(tokens, input);
+
+        (asm.asm.finish(), asm.data, asm.rewrites)
+    }
+    fn assemble(&mut self, tokens: Vec<Token>, input: &str) {
         let mut tokens = tokens.iter().filter(|t| !t.commentp());
         while let Some(t) = tokens.next() {
             match t {
-                s @ Token::Symbol(_) => { asm.asm.label(s.as_str(input)); },
+                s @ Token::Symbol(_) => { self.asm.label(s.as_str(input)); },
                 Token::LParen(_) => if let Some(Token::Symbol(i)) = tokens.next() {
                     let s = Token::Symbol(*i).as_str(input);
-                    if "define" == s {
-                        asm.handle_define(&mut tokens, input);
+                    if "include!" == s {
+                        self.handle_include(&mut tokens, input);
+                    } else if "define" == s {
+                        self.handle_define(&mut tokens, input);
                     } else {
-                        asm.handle_opcode(s, &mut tokens, input);
+                        self.handle_opcode(s, &mut tokens, input);
                     }
                 } else {
                     unreachable!();
@@ -142,13 +149,22 @@ impl<'a> Asm<'a> {
                 _ => unreachable!(),
             }
         }
-
-        (asm.asm.finish(), asm.data, asm.rewrites)
     }
 
-    fn handle_define<'b,  I: Iterator<Item = &'b Token>>(&mut self, tokens: &mut I, input: &'a str) {
+    fn handle_include<'b,  I: Iterator<Item = &'b Token>>(&mut self, tokens: &mut I, input: &str) {
+        let filename = tokens.next().unwrap();
+        assert!(filename.is_string());
+        let filename = filename.as_str(input);
+        let filename = &filename[1..filename.len()-1];
+        assert!(tokens.next().unwrap().closerp());
+        let include_input = fs::read_to_string(filename).unwrap();
+        let include_tokens = tokenizer::Tokenizer::tokenize(&include_input).unwrap();
+        self.assemble(include_tokens, &include_input);
+    }
+
+    fn handle_define<'b,  I: Iterator<Item = &'b Token>>(&mut self, tokens: &mut I, input: &str) {
         let var = if let Some(Token::Symbol(i)) = tokens.next() {
-            Token::Symbol(*i).as_str(input)
+            Token::Symbol(*i).as_str(input).to_string()
         } else {
             unreachable!();
         };
