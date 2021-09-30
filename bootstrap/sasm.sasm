@@ -731,11 +731,28 @@ tokenize
             (bgeu x29 x7 distinguish-ambiguous-symbol)
             (bne x28 input distinguish-ambiguous-intp-loop)
         distinguish-ambiguous-int
-            ;; TODO: convert to integer in x31
+            (add x6 x0 input)
+            (add x27 x0 x0)
+            (addi x29 x0 1)
+            distinguish-ambiguous-int-convert
+                (lb x27 (- x6 1))
+                (subi x6 x6 1)
+                (subi x7 x27 #'+')
+                (beq x7 x0 distinguish-ambiguous-int-convert-after)
+                (subi x7 x27 #'-')
+                (beq x7 x0 distinguish-ambiguous-int-convert-after)
+                (subi x27 x27 #'0')
+                (mul x27 x27 x29)
+                (mul x29 x29 10)
+                (add x28 x28 x27)
+                (bne x6 x31 distinguish-ambiguous-int-convert)
+            distinguish-ambiguous-int-convert-after
+            (add x31 x0 x28)
             (addi x30 x0 Token::Integer)
             (jal x0 tokenize-loop-push-token)
         distinguish-ambiguous-symbol
             ;; TODO: call symbol-table::string->symbol and place result in x31
+            (add x31 x0 x10)
             (addi x30 x0 Token::Symbol)
             (jal x0 tokenize-loop-push-token)
 
@@ -771,6 +788,7 @@ tokenize
         tokenize-identifier-after-loop
             (subi input input 1)
             ;; TODO: call symbol-table::string->symbol and place result in x31
+            (add x31 x0 x10)
             (jal x0 tokenize-loop-push-token)
 
     tokenize-comment
