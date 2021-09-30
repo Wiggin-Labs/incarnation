@@ -7,13 +7,20 @@
 ;;     String(startptr, length),
 ;;     Pound,
 ;; }
-(define Token::LeftParen 0)
-(define Token::RightParen 1)
-(define Token::Symbol 2)
-(define Token::Integer 3)
-(define Token::Char 4)
-(define Token::String 5)
-(define Token::Pound 6)
+;(define Token::LeftParen 0)
+;(define Token::RightParen 1)
+;(define Token::Symbol 2)
+;(define Token::Integer 3)
+;(define Token::Char 4)
+;(define Token::String 5)
+;(define Token::Pound 6)
+(define Token::LeftParen #'(')
+(define Token::RightParen #')')
+(define Token::Symbol #'s')
+(define Token::Integer #'i')
+(define Token::Char #'c')
+(define Token::String #'t')
+(define Token::Pound #'#')
 
 (include! "sasm-strings.sasm")
 (include! "syscalls.sasm")
@@ -73,39 +80,41 @@ start
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;; Test tokenizer
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;(add x20 x0 x13)
-;(addi x10 x0 1)
-;(slli x10 x10 16)
-;(add x10 x10 x13)
-;(addi x17 x0 214)
-;(ecall)
-;(add x11 x13 x0)
-;(add x18 x0 x12)
-;test-tokenizer-loop
-;    (beq x18 x19 test-tokenizer-loop-write)
-;    (ld x11 (+ 8 x18))
-;    (lw x12 (+ 4 x18))
-;    (addi x10 x0 1)
-;    (addi x17 x0 64)
-;    (ecall)
-;    (addi x18 x18 16)
-;    (jal x0 test-tokenizer-loop)
-;test-tokenizer-loop-write
-;   ;; write(fd, msg, len)
-;    (addi x10 x0 1)
-;    ;(add x11 x0 x12)
-;    ;(sub x12 x19 x11)
-;    (sub x12 x13 x20)
-;    (addi x17 x0 64)
-;    (ecall)
-;    ;; exit(0)
-;    (add x10 x0 x0)
-;    (addi x17 x0 93)
-;    (ecall)
+(add x20 x0 x10)
+(add x21 x0 x11)
+
+;; Allocate 64k
+(add x10 x0 x0)
+(addi x17 x0 214)
+(ecall)
+(add x22 x0 x10)
+(addi x11 x0 1)
+(slli x11 x11 16)
+(add x10 x10 x11)
+(addi x17 x0 214)
+(ecall)
+(add x11 x22 x0)
+(add x12 x11 x0)
+
+test-tokenizer-loop
+    (beq x20 x21 test-tokenizer-loop-write)
+    (lw x6 x20)
+    (sb x10 x6)
+    (addi x20 x20 16)
+    (addi x12 x12 1)
+    (jal x0 test-tokenizer-loop)
+test-tokenizer-loop-write
+   ;; write(fd, msg, len)
+    (addi x10 x0 1)
+    (sub x12 x12 x11)
+    (addi x17 x0 64)
+    (ecall)
+    ;; exit(0)
+    (add x10 x0 x0)
+    (addi x17 x0 93)
+    (ecall)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-    (add x10 x0 x12)
-    (add x11 x0 x19)
     (jal x1 assemble)
     (jal x1 elf)
     (sd (- 8 x2) x10)
@@ -278,7 +287,7 @@ tokenize
         (ld x10 x2)
         (ld x1 (+ x2 8))
         (addi x2 x2 16)
-        (add x11 tokens)
+        (add x11 x0 tokens)
         (jalr x0 x1)
 
     tokenize-string
@@ -440,8 +449,9 @@ tokenize
                 (beq x7 x0 distinguish-ambiguous-int-convert-after)
                 (subi x27 x27 #'0')
                 (mul x27 x27 x29)
-                (mul x29 x29 10)
                 (add x28 x28 x27)
+                (addi x27 x0 10)
+                (mul x29 x29 x27)
                 (bne x6 x31 distinguish-ambiguous-int-convert)
             distinguish-ambiguous-int-convert-after
             (add x31 x0 x28)
@@ -453,15 +463,15 @@ tokenize
             (sd (- x2 24) tokens)
             (sd (- x2 32) tokens.capacity)
             (subi x2 x2 32)
-            (add x11 x0 x10
+            (add x11 x0 x10)
             (add x10 x0 x31)
-            (jalr x1 symbol-table::string->symbol)
+            (jal x1 symbol-table::string->symbol)
             (add x31 x0 x10)
             (addi x2 x2 32)
-            (ld (- x2 8) input)
-            (ld (- x2 16) input.len)
-            (ld (- x2 24) tokens)
-            (ld (- x2 32) tokens.capacity)
+            (ld input (- x2 8))
+            (ld input.len (- x2 16))
+            (ld tokens (- x2 24))
+            (ld tokens.capacity (- x2 32))
             (addi x30 x0 Token::Symbol)
             (jal x0 tokenize-loop-push-token)
 
@@ -501,20 +511,20 @@ tokenize
             (sd (- x2 24) tokens)
             (sd (- x2 32) tokens.capacity)
             (subi x2 x2 32)
-            (add x11 x0 x10
+            (add x11 x0 x10)
             (add x10 x0 x31)
-            (jalr x1 symbol-table::string->symbol)
+            (jal x1 symbol-table::string->symbol)
             (add x31 x0 x10)
             (addi x2 x2 32)
-            (ld (- x2 8) input)
-            (ld (- x2 16) input.len)
-            (ld (- x2 24) tokens)
-            (ld (- x2 32) tokens.capacity)
+            (ld input (- x2 8))
+            (ld input.len (- x2 16))
+            (ld tokens (- x2 24))
+            (ld tokens.capacity (- x2 32))
             (jal x0 tokenize-loop-push-token)
 
     tokenize-comment
     (addi x29 x0 #'\n')
-    tokenize-loop
+    tokenize-comment-loop
         (beq input input.len tokenize-after-loop)
 
         (lb x28 input)
@@ -606,7 +616,7 @@ assemble
         (sd (- x2 16) x11)
         (add x10 x0 x28)
         (add x11 x0 x29)
-        (la x12 Instr::define)
+        ;;(la x12 Instr::define)
         (addi x13 x0 6)
         (jal x1 str-eq)
         (add x6 x0 x10)
@@ -743,7 +753,7 @@ assemble
     assemble-handle-opcode
         (ld x10 (- x10 8))
         (ld x11 (- x10 12))
-        (la x12 Instr::add)
+        ;;(la x12 Instr::add)
         (addi x13 x0 3)
         (jal x1 str-eq)
         ;; TODO
@@ -780,7 +790,7 @@ assemble
 
         (add x10 x0 x6)
         (add x11 x0 x7)
-        (la x12 Register::x0)
+        ;;(la x12 Register::x0)
         (addi x13 x0 2)
         (jal x1 str-eq)
         (add x6 x0 x0)
@@ -788,7 +798,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x1)
+        ;;(la x12 Register::x1)
         (addi x13 x0 2)
         (jal x1 str-eq)
         (addi x6 x0 1)
@@ -796,7 +806,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x2)
+        ;;(la x12 Register::x2)
         (addi x13 x0 2)
         (jal x1 str-eq)
         (addi x6 x0 2)
@@ -804,7 +814,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x3)
+        ;;(la x12 Register::x3)
         (addi x13 x0 2)
         (jal x1 str-eq)
         (addi x6 x0 3)
@@ -812,7 +822,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x4)
+        ;;(la x12 Register::x4)
         (addi x13 x0 2)
         (jal x1 str-eq)
         (addi x6 x0 4)
@@ -820,7 +830,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x5)
+        ;;(la x12 Register::x5)
         (addi x13 x0 2)
         (jal x1 str-eq)
         (addi x6 x0 5)
@@ -828,7 +838,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x6)
+        ;;(la x12 Register::x6)
         (addi x13 x0 2)
         (jal x1 str-eq)
         (addi x6 x0 6)
@@ -836,7 +846,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x7)
+        ;;(la x12 Register::x7)
         (addi x13 x0 2)
         (jal x1 str-eq)
         (addi x6 x0 7)
@@ -844,7 +854,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x8)
+        ;;(la x12 Register::x8)
         (addi x13 x0 2)
         (jal x1 str-eq)
         (addi x6 x0 8)
@@ -852,7 +862,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x9)
+        ;;(la x12 Register::x9)
         (addi x13 x0 2)
         (jal x1 str-eq)
         (addi x6 x0 9)
@@ -860,7 +870,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x10)
+        ;;(la x12 Register::x10)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 10)
@@ -868,7 +878,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x11)
+        ;;(la x12 Register::x11)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 11)
@@ -876,7 +886,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x12)
+        ;;(la x12 Register::x12)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 12)
@@ -884,7 +894,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x13)
+        ;;(la x12 Register::x13)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 13)
@@ -892,7 +902,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x14)
+        ;;(la x12 Register::x14)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 14)
@@ -900,7 +910,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x15)
+        ;;(la x12 Register::x15)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 15)
@@ -908,7 +918,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x16)
+        ;;(la x12 Register::x16)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 16)
@@ -916,7 +926,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x17)
+        ;;(la x12 Register::x17)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 17)
@@ -924,7 +934,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x18)
+        ;;(la x12 Register::x18)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 18)
@@ -932,7 +942,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x19)
+        ;;(la x12 Register::x19)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 19)
@@ -940,7 +950,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x20)
+        ;;(la x12 Register::x20)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 20)
@@ -948,7 +958,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x21)
+        ;;(la x12 Register::x21)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 21)
@@ -956,7 +966,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x22)
+        ;;(la x12 Register::x22)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 22)
@@ -964,7 +974,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x23)
+        ;;(la x12 Register::x23)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 23)
@@ -972,7 +982,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x24)
+        ;;(la x12 Register::x24)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 24)
@@ -980,7 +990,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x25)
+        ;;(la x12 Register::x25)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 25)
@@ -988,7 +998,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x26)
+        ;;(la x12 Register::x26)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 26)
@@ -996,7 +1006,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x27)
+        ;;(la x12 Register::x27)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 27)
@@ -1004,7 +1014,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x28)
+        ;;(la x12 Register::x28)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 28)
@@ -1012,7 +1022,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x29)
+        ;;(la x12 Register::x29)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 29)
@@ -1020,7 +1030,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x30)
+        ;;(la x12 Register::x30)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 30)
@@ -1028,7 +1038,7 @@ assemble
 
         (ld x10 (- x2 32))
         (lw x11 (- x2 36))
-        (la x12 Register::x31)
+        ;;(la x12 Register::x31)
         (addi x13 x0 3)
         (jal x1 str-eq)
         (addi x6 x0 31)
@@ -1115,14 +1125,14 @@ malloc
 
     malloc-allocate
         ;; brk(CURRENT_END+blk_size)
-        (la x7 HEAP_END)
+        (la x7 HEAP-END)
         (ld x10 x7)
         (ld x6 (- x2 8))
         (add x10 x10 x6)
         (addi x17 x0 SYS_BRK)
         (ecall)
         (sd x7 x10)
-        (subi x10 x10 x6)
+        (sub x10 x10 x6)
 
     malloc-done
         (ori x6 x6 1)
@@ -1186,7 +1196,7 @@ realloc
 
     (bge x6 x11 realloc-done)
 
-    (addi x7 x6 x10)
+    (add x7 x6 x10)
     (la x28 HEAP-END)
     (ld x28 x28)
     (beq x7 x28 realloc-extend)

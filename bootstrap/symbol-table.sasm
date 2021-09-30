@@ -273,7 +273,7 @@ symbol-table::string->symbol
     symbol-table::string->symbol-loop
         (ld x12 x20)
         (ld x13 (+ x20 8))
-        (jal x1 string-eq)
+        (jal x1 str-eq)
         (bne x10 x0 symbol-table::string->symbol-found)
 
         (addi x20 x20 16)
@@ -281,17 +281,17 @@ symbol-table::string->symbol
         (ld x10 x2)
         (ld x11 (+ x2 8))
         (bne x21 x0 symbol-table::string->symbol-loop)
-    (ld (+ x2 16) x1)
+    (sd (+ x2 16) x1)
     (addi x2 x2 24)
     (jal x0 symbol-table::add-string)
 
     symbol-table::string->symbol-found
-        (la x6 SYMBOL-tABLE.len)
+        (la x6 SYMBOL-TABLE.len)
         (ld x6 x6)
         (sub x10 x6 x21)
-        (ld (+ x2 16) x1)
+        (ld x1 (+ x2 16))
         (addi x2 x2 24)
-        (jal x0 x1)
+        (jalr x0 x1)
 
     symbol-table::add-string
         ;; TODO: check capacity and realloc if necessary, can possibly get rid of init then
@@ -301,4 +301,4 @@ symbol-table::string->symbol
         (ld x10 x6)
         (addi x10 x10 1)
         (sd x6 x10)
-        (jal x0 x1)
+        (jalr x0 x1)
