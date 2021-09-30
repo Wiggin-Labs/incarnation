@@ -384,6 +384,7 @@ impl Asm {
             "sra" => r!(sra, self, tokens, input),
             "slt" => r!(slt, self, tokens, input),
             "sltu" => r!(sltu, self, tokens, input),
+            "mul" => r!(mul, self, tokens, input),
 
             "addi" => i!(addi, self, tokens, input),
             "subi" => i!(subi, self, tokens, input),
