@@ -448,8 +448,20 @@ tokenize
             (addi x30 x0 Token::Integer)
             (jal x0 tokenize-loop-push-token)
         distinguish-ambiguous-symbol
-            ;; TODO: call symbol-table::string->symbol and place result in x31
+            (sd (- x2 8) input)
+            (sd (- x2 16) input.len)
+            (sd (- x2 24) tokens)
+            (sd (- x2 32) tokens.capacity)
+            (subi x2 x2 32)
+            (add x11 x0 x10
+            (add x10 x0 x31)
+            (jalr x1 symbol-table::string->symbol)
             (add x31 x0 x10)
+            (addi x2 x2 32)
+            (ld (- x2 8) input)
+            (ld (- x2 16) input.len)
+            (ld (- x2 24) tokens)
+            (ld (- x2 32) tokens.capacity)
             (addi x30 x0 Token::Symbol)
             (jal x0 tokenize-loop-push-token)
 
@@ -484,8 +496,20 @@ tokenize
             (jal x0 tokenize-identifier-loop)
         tokenize-identifier-after-loop
             (subi input input 1)
-            ;; TODO: call symbol-table::string->symbol and place result in x31
+            (sd (- x2 8) input)
+            (sd (- x2 16) input.len)
+            (sd (- x2 24) tokens)
+            (sd (- x2 32) tokens.capacity)
+            (subi x2 x2 32)
+            (add x11 x0 x10
+            (add x10 x0 x31)
+            (jalr x1 symbol-table::string->symbol)
             (add x31 x0 x10)
+            (addi x2 x2 32)
+            (ld (- x2 8) input)
+            (ld (- x2 16) input.len)
+            (ld (- x2 24) tokens)
+            (ld (- x2 32) tokens.capacity)
             (jal x0 tokenize-loop-push-token)
 
     tokenize-comment
