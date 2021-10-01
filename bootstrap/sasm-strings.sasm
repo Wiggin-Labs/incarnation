@@ -158,3 +158,5 @@
 (define Instr::ecall 75)
 (define Instr::ebreak::str "ebreak")
 (define Instr::ebreak 76)
+(define Instr::mul::str "mul")
+(define Instr::mul 77)
