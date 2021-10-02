@@ -18,7 +18,7 @@ pub struct Elf {
 impl Elf {
     // data is a list of constants
     // rewrites is a map of indexes into the program to data indexes
-    pub fn new(isa: ISA, mut program: Vec<u8>, data: Vec<Vec<u8>>, rewrites: HashMap<usize, usize>) -> Self {
+    pub fn new(isa: ISA, mut program: Vec<u8>, mut data: Vec<Vec<u8>>, rewrites: HashMap<usize, usize>) -> Self {
         // TODO
         assert!(program.len() < 0x200000);
         let data_offset = 64+56+56+program.len() as u64;
@@ -28,7 +28,12 @@ impl Elf {
         let mut pos = DATA_LOCATION + data_offset;
         //let mut pos = DATA_LOCATION;
         let mut data_len = 0;
-        for id in &data {
+        for id in &mut data {
+            let align = (pos+id.len() as u64) % 8;
+            for _ in 0..align {
+                println!("align");
+                id.push(0);
+            }
             data_position.push(pos);
             pos += id.len() as u64;
             data_len += id.len();
