@@ -28,7 +28,9 @@
 start
     ;; Init malloc
     (jal x1 malloc-init)
+    (include! "test-malloc.sasm")
     (jal x1 symbol-table-init)
+    ;;(include! "symbol-table-test.sasm")
 
     ;; Check that argc == 2
     (lw x10 x2)
