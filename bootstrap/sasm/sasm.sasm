@@ -28,7 +28,7 @@
 start
     ;; Init malloc
     (jal x1 malloc-init)
-    (include! "test-malloc.sasm")
+    ;;(include! "test-malloc.sasm")
     (jal x1 symbol-table-init)
     ;;(include! "symbol-table-test.sasm")
 
@@ -1057,6 +1057,7 @@ malloc-init
     (sd x6 x10)
     (la x6 HEAP-END)
     (sd x6 x10)
+    (jalr x0 x1)
 
 ;; Based on simple design outlined near the beginning of https://moss.cs.iit.edu/cs351/slides/slides-malloc.pdf
 ;; Args
@@ -1070,6 +1071,7 @@ malloc-init
 (define Malloc::SIZE_T_SIZE 8)
 malloc
     ;; Align(size)
+    (addi x10 x10 Malloc::SIZE_T_SIZE)
     (addi x10 x10 Malloc::Alignment)
     (andi x10 x10 -8)
     (sd (- x2 8) x10)
@@ -1082,7 +1084,7 @@ malloc
     (beq x10 x0 malloc-allocate)
     (ld x6 (- x2 8))
     (ld x7 x10)
-    (bge x7 x6 malloc-allocate)
+    (bge x7 x6 malloc-done)
 
     (sub x7 x7 x6)
     (add x28 x10 x6)
@@ -1120,7 +1122,7 @@ malloc
             (blt x10 x28 find-fit-done)
 
             (add x28 x28 x6)
-            (bge x7 x28 find-fit-set-header)
+            (bge x7 x28 find-fit-null)
             (ld x29 x28)
             (andi x29 x29 1)
             (bne x29 x0 find-fit-set-header)
@@ -1155,7 +1157,7 @@ free
 ;; x11 - new size in bytes
 realloc
     (ld x6 (- x10 Malloc::SIZE_T_SIZE))
-    (subi x6 x6 1)
+    (subi x6 x6 9)
     ;; ALIGN(size + SIZE_T_SIZE)
     (addi x11 x11 Malloc::Alignment)
     (andi x11 x11 -8)
@@ -1170,7 +1172,7 @@ realloc
     (subi x2 x2 16)
     (sd (+ x2 8) x10)
     (sd x2 x1)
-    (add x10 x11 x0)
+    (add x10 x0 x11)
     (jal x1 malloc)
     (ld x1 x2)
     (ld x11 (+ x2 8))
@@ -1180,15 +1182,15 @@ realloc
     (add x29 x0 x11)
     ;; Load the header/length of the old block
     (ld x7 (- x11 8))
-    (subi x7 x6 1)
+    (subi x7 x7 1)
     realloc-copy-loop
         ;; Note we load a u64 at a time to save on iterations. This is okay because we
-        are 8-byte aligned.
+        ;; are 8-byte aligned.
         (ld x28 x11)
         (sd x6 x28)
         (addi x6 x6 8)
         (addi x11 x11 8)
-        (subi x7 x7 1)
+        (subi x7 x7 8)
         (bne x7 x0 realloc-copy-loop)
     realloc-after-loop
         (sd (- x2 8) x10)
