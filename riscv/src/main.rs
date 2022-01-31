@@ -48,7 +48,7 @@ struct Asm {
     data: Vec<Vec<u8>>,
     rewrites: HashMap<usize, usize>,
     constants: HashMap<String, i32>,
-    globals: HashMap<String, usize>,
+    globals: HashMap<String, (usize, usize)>,
     register_aliases: HashMap<String, Register>,
 }
 
@@ -216,7 +216,7 @@ impl Asm {
                     }
                     i += 1;
                 }
-                self.globals.insert(var, self.data.len());
+                self.globals.insert(var, (self.data.len(), v.len()));
                 self.data.push(v);
             }
             Token::Pound(_) => {
@@ -233,7 +233,7 @@ impl Asm {
                         _ => unreachable!(),
                     }
                 }
-                self.globals.insert(var, self.data.len());
+                self.globals.insert(var, (self.data.len(), v.len()));
                 self.data.push(v);
             }
             _ => unreachable!(),
@@ -322,7 +322,7 @@ impl Asm {
                 let i = match tokens.next().unwrap() {
                     s @ Token::Symbol(_) => {
                         let s = s.as_str(input);
-                        *self.globals.get(s).unwrap()
+                        self.globals.get(s).unwrap().1
                     },
                     s @ Token::String(_) => {
                         let s = s.as_str(input).as_bytes();
@@ -413,8 +413,8 @@ impl Asm {
                     unreachable!();
                 };
                 assert!(tokens.next().unwrap().closerp());
-                let addr = self.globals.get(symbol).unwrap();
-                self.rewrites.insert(self.asm.len(), *addr);
+                let addr = self.globals.get(symbol).unwrap().0;
+                self.rewrites.insert(self.asm.len(), addr);
                 self.asm.lui(rd, 0);
                 self.asm.addi(rd, rd, 0);
             }
