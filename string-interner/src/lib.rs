@@ -14,6 +14,11 @@ pub fn get_symbol(value: String) -> Symbol {
 }
 
 #[inline]
+pub fn get_symbol_uninterned(value: String) -> Symbol {
+    INTERNER.lock().unwrap().get_symbol_uninterned(value)
+}
+
+#[inline]
 pub fn get_value(s: Symbol) -> Option<String> {
     INTERNER.lock().unwrap().get_value(s)
 }
@@ -39,6 +44,11 @@ impl StringInterner {
             self.symbols.push(value);
             Symbol::new(self.symbols.len() - 1)
         }
+    }
+
+    pub fn get_symbol_uninterned(&mut self, value: String) -> Symbol {
+        self.symbols.push(value);
+        Symbol::new(self.symbols.len() - 1)
     }
 
     pub fn get_value(&self, s: Symbol) -> Option<String> {
