@@ -10,6 +10,8 @@ pub use error::ParserError;
 use string_interner::{INTERNER, Symbol};
 use tokenizer::Token;
 
+use std::fmt;
+
 pub type Result<T> = std::result::Result<T, ParserError>;
 
 #[derive(Clone, Debug, is_enum_variant)]
@@ -34,7 +36,11 @@ pub enum Ast {
     Block(Vec<Ast>),
     Primitive(CompilePrimitive),
     Asm(Vec<Token>),
-    Intrinsic(Vec<Ast>),
+    Intrinsic {
+        name: Symbol,
+        ty: Type,
+        args: Vec<Arg>,
+    },
     Application(Vec<Ast>),
     Identifier(Symbol),
     /*
@@ -58,6 +64,13 @@ impl Ast {
             If { consequent, ..  } => consequent.ty(),
             Block(v) => v.last().map_or(Type::Empty, |e| e.ty()),
             _ => todo!(),
+        }
+    }
+
+    pub fn unwrap_primitive(self) -> CompilePrimitive {
+        match self {
+            Ast::Primitive(p) => p,
+            _ => unreachable!(),
         }
     }
 }
@@ -115,6 +128,30 @@ impl Type {
             _ => unreachable!(),
         }
     }
+
+    pub fn prim_eq(&self, other: &Self) -> bool {
+        self == other || match (self, other) {
+            (Type::U8, Type::I32) => true,
+            (Type::U8, Type::Usize) => true,
+            (Type::I32, Type::Usize) => true,
+            _ => false,
+        } || other.prim_eq(self)
+    }
+
+    pub fn c_type(&self) -> String {
+        use Type::*;
+        match self {
+            U8 => "uint8_t".into(),
+            Usize => "uintptr_t".into(),
+            I32 => "int32_t".into(),
+            Bool => "bool".into(),
+            String => "char*".into(),
+            Empty => "void".into(),
+            Never => "void".into(),
+            Ptr(t) => format!("{}*", t.c_type()),
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -135,6 +172,16 @@ impl CompilePrimitive {
     }
 }
 
+impl fmt::Display for CompilePrimitive {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CompilePrimitive::Bool(b) => write!(f, "{}", b),
+            CompilePrimitive::Integer(b) => write!(f, "{}", b),
+            CompilePrimitive::String(b) => write!(f, "{}", b),
+        }
+    }
+}
+
 pub fn parse(tokens: Vec<Token>, input: &str) -> Result<Vec<Ast>> {
     let mut ast = Vec::new();
     let mut tokens = Tokens::new(tokens);
@@ -149,6 +196,7 @@ pub fn parse(tokens: Vec<Token>, input: &str) -> Result<Vec<Ast>> {
                 Ast::Include(_) => ast.push(expr),
                 Ast::Define { .. } => ast.push(expr),
                 Ast::Defn { .. } => ast.push(expr),
+                Ast::Intrinsic { .. } => ast.push(expr),
                 _ => return Err(ParserError::Item),
             }
         } else {
@@ -255,20 +303,78 @@ fn handle_inline_asm(tokens: &mut Tokens, _input: &str) -> Result<Ast> {
 }
 
 // TODO
-fn handle_intrinsic(tokens: &mut Tokens, _input: &str) -> Result<Ast> {
-    let mut application = Vec::new();
-    /*
-    application.push(Ast::Identifier(get_symbol(t, input)));
-    while let Some(expr) = parse_expr(tokens, input)? {
-        if expr.is_identifier() || expr.is_primitive() || expr.is_application() {
-            application.push(expr);
-        } else {
-            return Err(ParserError::Value);
+fn handle_intrinsic(tokens: &mut Tokens, input: &str) -> Result<Ast> {
+    next!(token, tokens, {
+        if !token.openerp() {
+            return Err(ParserError::Token);
         }
-    }
-    */
+    });
 
-    Ok(Ast::Intrinsic(application))
+    let name = next!(token, tokens, {
+        if token.is_symbol() {
+            get_symbol(token, input)
+        } else {
+            return Err(ParserError::Token);
+        }
+    });
+
+    // Beginning of argument list
+    next!(token, tokens, {
+        if !token.openerp() {
+            return Err(ParserError::Token);
+        }
+    });
+
+    let mut args = Vec::new();
+    // Each argument is of the form `(ident type)`
+    loop {
+        // Read the argument opener
+        next!(token, tokens, {
+            // A closer here denotes the end of the argument list.
+            if token.closerp() {
+                break;
+            } else if !token.openerp() {
+                return Err(ParserError::Token);
+            }
+        });
+
+        let arg_name = next!(token, tokens, {
+            if token.is_symbol() {
+                get_symbol(token, input)
+            } else {
+                return Err(ParserError::Token);
+            }
+        });
+
+        let arg_type = read_type(tokens, input)?;
+
+        // Read the argument closer
+        handle_closer(tokens)?;
+
+        args.push(Arg::new(arg_name, arg_type));
+    }
+
+    let ret_ty = if let Some(t) = tokens.peek() {
+        if t.closerp() {
+            Type::Empty
+        } else {
+            read_type(tokens, input)?
+        }
+    } else {
+        return Err(ParserError::EOI);
+    };
+
+    // End of function preamble
+    handle_closer(tokens)?;
+
+    handle_closer(tokens)?;
+
+    let ty = Type::Arrow(args.iter().map(|arg| arg.ty.clone()).collect(), Box::new(ret_ty.clone()));
+    Ok(Ast::Intrinsic {
+        name: name,
+        ty: ty,
+        args: args
+    })
 }
 
 fn parse_identifier(t: Token, tokens: &mut Tokens, input: &str) -> Result<Ast> {

@@ -1,33 +1,16 @@
-extern crate amd64;
-extern crate asm_syntax;
+//extern crate amd64;
+//extern crate asm_syntax;
 extern crate parser;
 extern crate string_interner;
 extern crate tokenizer;
 extern crate type_checker;
 
+use parser::Ast;
+use string_interner::get_value;
+
 fn main() {
-    /*
-    let tokens = tokenizer::Tokenizer::tokenize(input).unwrap();
-    let instructions = asm_syntax::parser::parse(&tokens, input, false).unwrap();
-    //let instructions = assembly::parse(&tokens, input, false).unwrap();
-    let code = amd64::assemble(instructions, input).unwrap();
-    incarnation::executable::generate_executable("test.o".into(), code);
-    */
-
-    /*
-    let input = r#"
-    (include libs/unix/lib.inc)
-    (defn (main ())
-      (exit 5))
-    "#;
-    let tokens = tokenizer::Tokenizer::tokenize(input).unwrap();
-    let ast = parser::parse(tokens, input).unwrap();
-
-    let input = include_str!("../../libs/unix/lib.inc");
-    let tokens = tokenizer::Tokenizer::tokenize(input).unwrap();
-    let ast = parser::parse(tokens, input).unwrap();
-    type_checker::type_check(ast).unwrap();
-    */
+    //let mut builtins = HashMap::new();
+    //builtins.insert("+", "{}+{}");
 
     /*
     let fizzbuzz = r#"
@@ -72,26 +55,133 @@ fn main() {
 
     (define STDOUT 1)
 
-    (defn (print ([s string] [length usize]))
-        (write STDOUT s length))
+    (defn (print ([s string]))
+        (write STDOUT s 5))
 
-    (defn (write ([fd i32] [data string] [size usize]))
-        (#asm (mov rax (i32 1))
-              (syscall)))
+    (#intrinsic (write ([fd i32] [data string] [size usize])))
 
-    (defn (exit ([i i32]))
-        (#asm (mov rax (i32 0))
-              (syscall)))
+    (#intrinsic (exit ([i i32])))
     "#;
+    /*
+     * void main() {
+     *     print("hello, world!\n");
+     *     exit(0);
+     * }
+     *
+     * const int STDOUT = 1;
+     *
+     * void print(string s) {
+     *     write(STDOUT, s, S.LEN);
+     * }
+     */
     let tokens = tokenizer::Tokenizer::tokenize(input).unwrap();
     let ast = parser::parse(tokens, input).unwrap();
     type_checker::type_check(&ast).unwrap();
-    compile(ast, input);
-    //let instructions = compile(ast);
-    //let code = amd64::assemble(instructions).unwrap();
-    println!("Ok");
+    println!("{}", compile(ast));
 }
 
+fn compile(ast: Vec<Ast>) -> String {
+    let mut s = String::from(include_str!("prelude.c"));
+    ast.iter().filter(|a| a.is_define()).for_each(|a| s.push_str(&compile_define(&a)));
+    ast.iter().filter(|a| a.is_defn()).for_each(|a| {
+        if let Ast::Defn { name, ty, ..} = a {
+            let (args, ret) = ty.arrow_split();
+            let mut sig = format!("{} {}(", ret.c_type(), get_value(*name).unwrap());
+            for arg in args {
+                sig.push_str(&format!("{},", arg.c_type()));
+            }
+            if sig.ends_with(',') {
+                sig.pop();
+            }
+            sig.push_str(");\n");
+            s.push_str(&sig);
+        }
+    });
+    for a in ast {
+        match a {
+            Ast::Define { .. } => (),
+            Ast::Defn { .. } => s.push_str(&compile_defn(&a)),
+            Ast::Intrinsic { .. } => (),
+            _ => unreachable!(),
+        }
+    }
+    s
+}
+
+fn compile_define(a: &Ast) -> String {
+    match a {
+        Ast::Define { name, ty, value } => {
+            format!("const {} {} = {};\n", ty.c_type(), get_value(*name).unwrap(), compile_expr(value))
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn compile_defn(a: &Ast) -> String {
+    match a {
+        Ast::Defn { name, ty, args, body } => {
+            let (_, ret) = ty.arrow_split();
+            let mut s = format!("{} {}(", ret.c_type(), get_value(*name).unwrap());
+            for arg in args {
+                s.push_str(&format!("{} {},", arg.ty.c_type(), get_value(arg.name).unwrap()));
+            }
+            // Remove trailing comma
+            if s.ends_with(',') {
+                s.pop();
+            }
+            s.push_str(") {\n");
+            for e in body {
+                s.push_str(&compile_expr(e));
+                s.push_str(";\n");
+            }
+            s.push_str("}\n");
+            s
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn compile_expr(e: &Ast) -> String {
+    match e {
+        Ast::Define { .. } => compile_define(e),
+        Ast::Defn { .. } => compile_defn(e),
+        Ast::Block(block) => {
+            let mut s = String::from("{\n");
+            for b in block {
+                s.push_str(&format!("{}\n", compile_expr(b)));
+            }
+            s.push_str("}\n");
+            s
+        }
+        Ast::Primitive(p) => p.to_string(),
+        Ast::Application(app) => {
+            let mut s = format!("{}(", compile_expr(&app[0]));
+            for a in &app[1..] {
+                s.push_str(&format!("{},", compile_expr(a)));
+            }
+            // Remove trailing comma
+            if s.ends_with(',') {
+                s.pop();
+            }
+            s.push_str(")");
+            s
+        }
+        Ast::Identifier(s) => get_value(*s).unwrap(),
+        Ast::If { predicate, consequent, alternative } => {
+            if let Some(alternative) = alternative {
+                format!("if ({}) {{\n{}\n}} else {{\n{}\n}}\n",
+                        compile_expr(predicate),
+                        compile_expr(consequent),
+                        compile_expr(alternative))
+            } else {
+                format!("if ({}) {{\n{}\n}}\n", compile_expr(predicate), compile_expr(consequent))
+            }
+        }
+        _ => unreachable!(),
+    }
+}
+
+/*
 fn compile(mut ast: Vec<Ast>, input: &str) {
     // If we do this we cover definitions of constants prior to compiling procedures
     ast.sort_unstable_by(|a, b|
@@ -127,6 +217,7 @@ fn compile_defn(name: Symbol, args: Vec<Arg>, body: Vec<Ast>, input: &str) -> Li
     }
     Lir::Fun(name, _)
 }
+*/
 
 /*
 use asm_syntax::{Immediate, Instruction, Operand};
@@ -257,3 +348,4 @@ fn get_register(i: usize) -> Symbol {
     })
 }
 */
+

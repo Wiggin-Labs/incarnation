@@ -3,8 +3,8 @@ name = "incarnation"
 version = "0.1.0"
 authors = ["Hunter Praska <hunter@wiggin-labs.com>"]
 
-[dependencies.amd64]
-path = "amd64"
+#[dependencies.amd64]
+#path = "amd64"
 
 [dependencies.asm-syntax]
 path = "asm-syntax"

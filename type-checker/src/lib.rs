@@ -28,6 +28,8 @@ pub fn type_check(ast: &[Ast]) -> Result<()> {
             bindings.insert(*name, ty.clone());
         } else if let Ast::Defn { name, ty, .. } = a {
             bindings.insert(*name, ty.clone());
+        } else if let Ast::Intrinsic { name, ty, .. } = a {
+            bindings.insert(*name, ty.clone());
         }
     }
 
@@ -90,6 +92,7 @@ pub fn type_check(ast: &[Ast]) -> Result<()> {
                 }
                 check_fun(ty.arrow_split().1, body, fun_env)?;
             }
+            Ast::Intrinsic { name, .. } => assert!(env.lookup_variable_type(*name).unwrap() != Type::Hole),
             // These should already be prevented by the parser
             _ => unreachable!(),
         }
@@ -102,6 +105,7 @@ fn check_block(body: &[Ast], env: Environment) -> Result<Type> {
     for (i, expr) in body.iter().enumerate() {
         match expr {
             Ast::Include(_) | Ast::Asm(_) => (),
+            Ast::Intrinsic { name, ty, .. } => env.define_variable(*name, ty.clone()),
             Ast::Define { name, ty, value } => {
                 match &**value {
                     Ast::Primitive(_) => if value.ty() != *ty {
@@ -168,13 +172,13 @@ fn check_fun(ty: Type, body: &[Ast], env: Environment) -> Result<()> {
 }
 
 fn check_application(a: &[Ast], env: Environment) -> Result<Type> {
-    let app_ty = match a[0] {
-        Ast::Identifier(s) => if let Some(ty) = env.lookup_variable_type(s) {
+    let app_ty = match &a[0] {
+        Ast::Identifier(s) => if let Some(ty) = env.lookup_variable_type(*s) {
             ty
         } else {
             return Err(TypeError::UnboundIdentifier);
         },
-        Ast::Application(_) => todo!(),
+        Ast::Application(ast) => check_application(&ast, env.clone())?,
         // TODO
         _ => unreachable!(),
     };
@@ -192,7 +196,8 @@ fn check_application(a: &[Ast], env: Environment) -> Result<Type> {
 
     for j in 0..arg_tys.len() {
         match &a[j+1] {
-            arg @ Ast::Primitive(_) => if arg.ty() != arg_tys[j] {
+            arg @ Ast::Primitive(_) => if !arg.ty().prim_eq(&arg_tys[j]) {
+                println!("{:?} {:?}", arg.ty(), arg_tys[j]);
                 return Err(TypeError::Incompatible);
             },
             Ast::Identifier(s) => if let Some(ty) = env.lookup_variable_type(*s) {

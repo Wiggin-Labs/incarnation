@@ -74,8 +74,7 @@ impl<'a> Tokenizer<'a> {
                     _ => pt!(T::Pound, self),
                 },
                 c if c.is_whitespace() => {}
-                '.' => self.parse_ambiguous()?,
-                '0' ..= '9' | '+' | '-' | 'i' | 'n' | 'f' | 'N' | 'a' => self.parse_ambiguous()?,
+                '0' ..= '9' | '+' | '-' | '.' | 'i' | 'n' | 'f' | 'N' | 'a' => self.parse_ambiguous()?,
                 _ => {
                     let start = self.position;
                     if '\\' == c && self.next().is_none() {
@@ -94,26 +93,22 @@ impl<'a> Tokenizer<'a> {
         while let Some(c) = self.next() {
             match c {
                 '0' ..= '9' | '+' | '-' | '/' | '.' | 'e' | 'i' | 'n' | 'f' | 'N' | 'a' => (),
-                '(' | '{' | '[' => {
+                c if is_delimiter(c) => {
                     self.distinguish_ambiguous(start)?;
-                    match c {
-                        '(' => pt!(T::LParen, self),
-                        '{' => pt!(T::LBrace, self),
-                        '[' => pt!(T::LSBracket, self),
-                        _ => unreachable!(),
-                    }
-                    return Ok(());
-                }
-                ')' | '}' | ']' => {
-                    self.distinguish_ambiguous(start)?;
-                    match c {
-                        ')' => pt!(T::RParen, self),
-                        '}' => pt!(T::RBrace, self),
-                        ']' => pt!(T::RSBracket, self),
-                        _ => unreachable!(),
-                    }
-                    return Ok(());
-                }
+                    return match c {
+                        c if c.is_whitespace() => Ok(()),
+                        '(' => Ok(pt!(T::LParen, self)),
+                        ')' => Ok(pt!(T::RParen, self)),
+                        '{' => Ok(pt!(T::LBrace, self)),
+                        '}' => Ok(pt!(T::RBrace, self)),
+                        '[' => Ok(pt!(T::LSBracket, self)),
+                        ']' => Ok(pt!(T::RSBracket, self)),
+                        '.' => Ok(pt!(T::Dot, self)),
+                        '"' => self.parse_string(),
+                        ';' => self.parse_comment(),
+                        _ => panic!("Tokenizer error"),
+                    };
+                },
                 _ if c.is_whitespace() => break,
                 '\\' => match self.next() {
                     Some(_) => return self.parse_identifier(start, false),
@@ -136,12 +131,20 @@ impl<'a> Tokenizer<'a> {
         let buf = &self.raw_input[start-1..end];
         let index = Index::new(start, end);
 
-        if intp(buf) {
+        if buf == "." {
+            self.tokens.push(T::Dot(index));
+        } else if intp(buf) {
             self.tokens.push(T::Integer(index));
         } else if floatp(buf) {
             self.tokens.push(T::Float(index));
         } else {
-            self.tokens.push(T::Symbol(index));
+            if let Some(i) = buf.find('.') {
+                self.tokens.push(T::Symbol(Index::new(start, i)));
+                self.tokens.push(T::Dot(Index::new(i, i+1)));
+                self.tokens.push(T::Symbol(Index::new(i+1, end)));
+            } else {
+                self.tokens.push(T::Symbol(index));
+            }
         }
         Ok(())
     }
@@ -164,6 +167,7 @@ impl<'a> Tokenizer<'a> {
                         '}' => Ok(pt!(T::RBrace, self)),
                         '[' => Ok(pt!(T::LSBracket, self)),
                         ']' => Ok(pt!(T::RSBracket, self)),
+                        '.' => Ok(pt!(T::Dot, self)),
                         '"' => self.parse_string(),
                         ';' => self.parse_comment(),
                         _ => panic!("Tokenizer error"),
@@ -274,7 +278,7 @@ fn is_delimiter(c: char) -> bool {
         '(' | '{' | '[' => true,
         ')' | '}' | ']' => true,
         c if c.is_whitespace() => true,
-        '"' | ';' => true,
+        '"' | ';' | '.' => true,
         _ => false,
     }
 }
