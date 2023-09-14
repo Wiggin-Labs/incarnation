@@ -1,12 +1,11 @@
-#![feature(once_cell)]
+#![feature(lazy_cell)]
 
 use std::collections::HashMap;
-use std::lazy::SyncLazy;
 use std::ops::Deref;
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 /// Global interner
-pub static INTERNER: SyncLazy<Mutex<StringInterner>> = SyncLazy::new(|| Mutex::new(StringInterner::new()));
+pub static INTERNER: LazyLock<Mutex<StringInterner>> = LazyLock::new(|| Mutex::new(StringInterner::new()));
 
 #[inline]
 pub fn get_symbol(value: String) -> Symbol {
